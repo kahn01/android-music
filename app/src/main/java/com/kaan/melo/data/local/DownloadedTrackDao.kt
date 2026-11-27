@@ -21,7 +21,7 @@ interface DownloadedTrackDao {
     suspend fun deleteByIds(trackIds: List<Long>)
 
     @Query("UPDATE downloaded_tracks SET playCount = playCount + 1, lastPlayedAt = :playedAt WHERE id = :trackId")
-    suspend fun recordPlay(trackId: Long, playedAt: Long = System.currentTimeMillis())
+    suspend fun recordPlay(trackId: Long, playedAt: Long)
 
     @Query("UPDATE downloaded_tracks SET artworkUrl = :url WHERE id = :trackId")
     suspend fun updateArtwork(trackId: Long, url: String)
