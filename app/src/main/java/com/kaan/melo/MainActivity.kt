@@ -249,6 +249,13 @@ private fun MeloApp() {
                 playlistTitle = playlistTitle,
                 playlistItems = playlistItems,
                 resolvingPlaylist = resolvingPlaylist,
+                onDownloadAllPlaylist = {
+                    playlistItems.forEach { track ->
+                        DownloadScheduler.enqueue(context, track.url, track.title, track.artist)
+                    }
+                    message = "${playlistItems.size} parça indirme kuyruğuna eklendi."
+                    selectedTab = 1
+                },
                 onDownloadPlaylistTrack = { track ->
                     DownloadScheduler.enqueue(
                         context = context,
@@ -278,7 +285,11 @@ private fun MeloApp() {
                 message = message,
                 source = source
             )
-            1 -> DownloadsScreen(Modifier.padding(padding), jobs)
+            1 -> DownloadsScreen(
+                Modifier.padding(padding),
+                jobs,
+                onCancel = { job -> WorkManager.getInstance(context).cancelWorkById(job.id) }
+            )
             else -> LibraryScreen(
                 modifier = Modifier.padding(padding),
                 tracks = tracks,
@@ -359,6 +370,7 @@ private fun HomeScreen(
     playlistTitle: String?,
     playlistItems: List<com.kaan.melo.download.YoutubePlaylistItem>,
     resolvingPlaylist: Boolean,
+    onDownloadAllPlaylist: () -> Unit,
     onDownloadPlaylistTrack: (com.kaan.melo.download.YoutubePlaylistItem) -> Unit
 ) {
     LazyColumn(
@@ -444,7 +456,22 @@ private fun HomeScreen(
                 if (playlistTitle != null) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(playlistTitle, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                        Text("${playlistItems.size} parça", color = Muted, fontSize = 12.sp)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("${playlistItems.size} parça", color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            Button(
+                                onClick = onDownloadAllPlaylist,
+                                enabled = playlistItems.isNotEmpty(),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 13.dp, vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Default.Download, null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Tümünü indir")
+                            }
+                        }
                         playlistItems.forEachIndexed { index, track ->
                             Row(
                                 Modifier.fillMaxWidth().background(SurfaceDark, RoundedCornerShape(14.dp)).padding(12.dp),
@@ -524,7 +551,11 @@ private fun SourceChip(name: String, mark: String) {
 }
 
 @Composable
-private fun DownloadsScreen(modifier: Modifier, jobs: List<WorkInfo>) {
+private fun DownloadsScreen(
+    modifier: Modifier,
+    jobs: List<WorkInfo>,
+    onCancel: (WorkInfo) -> Unit
+) {
     val active = jobs.filter { !it.state.isFinished }
     val completed = jobs.count { it.state == WorkInfo.State.SUCCEEDED }
     val failed = jobs.count { it.state == WorkInfo.State.FAILED || it.state == WorkInfo.State.CANCELLED }
@@ -570,8 +601,15 @@ private fun DownloadsScreen(modifier: Modifier, jobs: List<WorkInfo>) {
                                 Text("$progress%", color = Muted, fontSize = 10.sp)
                             }
                         }
-                        if (job.state == WorkInfo.State.ENQUEUED || job.state == WorkInfo.State.BLOCKED) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        if (!job.state.isFinished) {
+                            TextButton(
+                                onClick = { onCancel(job) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "İndirmeyi iptal et", tint = Color(0xFFFF8A80), modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(3.dp))
+                                Text("İptal", color = Color(0xFFFF8A80), fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -603,8 +641,21 @@ private fun LibraryScreen(
     onDelete: (DownloadedTrack) -> Unit
 ) {
     Column(modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 22.dp)) {
-        Text("Kütüphanem", fontSize = 29.sp, fontWeight = FontWeight.Bold)
-        Text("${tracks.size} kayıtlı parça · çevrimdışı dinleme", color = Muted, modifier = Modifier.padding(top = 5.dp, bottom = 16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Kütüphanem", fontSize = 29.sp, fontWeight = FontWeight.Bold)
+                Text("${tracks.size} kayıtlı parça · çevrimdışı dinleme", color = Muted, modifier = Modifier.padding(top = 5.dp, bottom = 16.dp))
+            }
+            FilledTonalButton(
+                onClick = { onSectionChange("Çalma listeleri"); onSelectPlaylist(null); onCreatePlaylistClick() },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Add, null, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Liste oluştur", fontSize = 11.sp)
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Şarkılar", "Çalma listeleri", "Sanatçılar").forEach { section ->
                 FilterChip(
