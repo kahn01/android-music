@@ -1,4 +1,4 @@
-package com.kaan.melo
+package com.kaan.melo.ui.components
 
 import android.os.Bundle
 import android.content.Intent
