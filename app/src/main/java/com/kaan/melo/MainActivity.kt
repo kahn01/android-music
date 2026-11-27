@@ -587,7 +587,15 @@ private fun DownloadsScreen(
                         Icon(if (job.state == WorkInfo.State.SUCCEEDED) Icons.Default.CheckCircle else Icons.Default.Download, null, tint = Accent)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(job.workSpecIdShort(), fontWeight = FontWeight.SemiBold)
+                            val downloadTitle = job.progress.getString(com.kaan.melo.download.DirectAudioDownloadWorker.KEY_TITLE)
+                                ?: job.inputData.getString(com.kaan.melo.download.DirectAudioDownloadWorker.KEY_TITLE)
+                                ?: "Bilinmeyen parça"
+                            val downloadArtist = job.progress.getString(com.kaan.melo.download.DirectAudioDownloadWorker.KEY_ARTIST)
+                                ?: job.inputData.getString(com.kaan.melo.download.DirectAudioDownloadWorker.KEY_ARTIST)
+                            Text(downloadTitle, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            if (!downloadArtist.isNullOrBlank()) {
+                                Text(downloadArtist, color = Muted, fontSize = 11.sp, maxLines = 1)
+                            }
                             Text(label, color = Muted, fontSize = 12.sp)
                             if (job.state == WorkInfo.State.RUNNING) {
                                 val progress = job.progress.getInt("progress", 0)
@@ -617,8 +625,6 @@ private fun DownloadsScreen(
         }
     }
 }
-
-private fun WorkInfo.workSpecIdShort(): String = "Ses dosyası · ${id.toString().take(8)}"
 
 @Composable
 private fun LibraryScreen(
