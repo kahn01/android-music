@@ -409,7 +409,7 @@ private fun MeloApp() {
                 onBulkDelete = { ids ->
                     if (ids.isNotEmpty()) {
                         val selected = tracks.filter { it.id in ids }
-                        if (playingTrackId in ids) {
+                        if (playingTrackId != null && playingTrackId in ids) {
                             player?.stop()
                             playingTrackId = null
                             isPlaying = false
