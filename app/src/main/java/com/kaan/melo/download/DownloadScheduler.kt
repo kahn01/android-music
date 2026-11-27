@@ -8,6 +8,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 
 object DownloadScheduler {
+    const val TAG_DOWNLOAD = "melo-download"
     fun enqueue(
         context: Context,
         url: String,
@@ -22,6 +23,7 @@ object DownloadScheduler {
 
         val request = OneTimeWorkRequestBuilder<DirectAudioDownloadWorker>()
             .setInputData(data)
+            .addTag(TAG_DOWNLOAD)
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
