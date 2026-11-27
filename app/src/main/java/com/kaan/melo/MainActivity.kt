@@ -108,7 +108,7 @@ private fun MeloApp() {
         .getWorkInfosByTagLiveData(DownloadScheduler.TAG_DOWNLOAD)
         .observeAsState(initial = emptyList())
     var selectedTab by remember { mutableIntStateOf(0) }
-    var showFullPlayer by remember { mutableStateOf(false) }
+    var showFullPlayer by remember { mutableStateOf(false) }\n    var vehicleMode by remember { mutableStateOf(false) }
     var link by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
@@ -192,7 +192,7 @@ private fun MeloApp() {
     Scaffold(
         containerColor = Background,
         bottomBar = {
-            if (!showFullPlayer) Column {
+            if (!showFullPlayer && !vehicleMode) Column {
                 val currentTrack = tracks.firstOrNull { it.id == playingTrackId }
                 if (currentTrack != null) {
                     Row(
