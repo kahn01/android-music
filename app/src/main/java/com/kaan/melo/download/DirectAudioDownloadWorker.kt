@@ -69,7 +69,7 @@ class DirectAudioDownloadWorker(
             connection.connectTimeout = 15_000
             connection.readTimeout = 30_000
             connection.instanceFollowRedirects = true
-            connection.setRequestProperty("User-Agent", "Melo-Android/0.1")
+            connection.setRequestProperty("User-Agent", "Durka-Android/1.0")
             connection.connect()
 
             val responseCode = connection.responseCode
@@ -82,7 +82,7 @@ class DirectAudioDownloadWorker(
             val path = connection.url.path.orEmpty().ifBlank { uri.lastPathSegment.orEmpty() }
             val extension = extensionFor(path, mime) ?: extensionHint ?: return@withContext Result.failure()
             if (mime.isNotBlank() && !mime.startsWith("audio/") &&
-                mime != "application/octet-stream" && mime != "binary/octet-stream" && mime != "application/octet-stream"
+                mime != "application/octet-stream" && mime != "binary/octet-stream"
             ) return@withContext Result.failure()
 
             val length = connection.contentLengthLong
@@ -90,7 +90,7 @@ class DirectAudioDownloadWorker(
 
             val directory = File(
                 applicationContext.getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC),
-                "Melo"
+                "Durka"
             )
             if (!directory.exists() && !directory.mkdirs()) return@withContext Result.failure()
 
@@ -108,7 +108,7 @@ class DirectAudioDownloadWorker(
                     while (true) {
                         if (isStopped) {
                             tempFile?.delete()
-                            return@withContext Result.failure()
+                            throw kotlinx.coroutines.CancellationException("Download cancelled")
                         }
                         val read = input.read(buffer)
                         if (read < 0) break

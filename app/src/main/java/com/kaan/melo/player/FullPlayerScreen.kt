@@ -36,6 +36,17 @@ fun FullPlayerScreen(
     var sliderPosition by remember { mutableFloatStateOf(0f) }
     var shuffle by remember { mutableStateOf(false) }
     var repeatMode by remember { mutableIntStateOf(Player.REPEAT_MODE_OFF) }
+    var showMoreMenu by remember { mutableStateOf(false) }
+    var showSleepDialog by remember { mutableStateOf(false) }
+    var sleepTimerMinutes by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(sleepTimerMinutes, player) {
+        if (sleepTimerMinutes > 0) {
+            kotlinx.coroutines.delay(sleepTimerMinutes * 60_000L)
+            player?.pause()
+            sleepTimerMinutes = 0
+        }
+    }
 
     LaunchedEffect(player) {
         while (true) {
@@ -63,7 +74,23 @@ fun FullPlayerScreen(
             Spacer(Modifier.weight(1f))
             Text("ŞİMDİ ÇALIYOR", color = Color.LightGray, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
             Spacer(Modifier.weight(1f))
-            IconButton(onClick = {}) { Icon(Icons.Default.MoreVert, "Diğer", tint = Color.White) }
+            Box {
+                IconButton(onClick = { showMoreMenu = true }) {
+                    Icon(Icons.Default.MoreVert, "Diğer", tint = Color.White)
+                }
+                DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(if (sleepTimerMinutes > 0) "Uyku zamanlayıcısı: ${sleepTimerMinutes} dk" else "Uyku zamanlayıcısı") },
+                        onClick = { showMoreMenu = false; showSleepDialog = true }
+                    )
+                    if (sleepTimerMinutes > 0) {
+                        DropdownMenuItem(
+                            text = { Text("Zamanlayıcıyı iptal et") },
+                            onClick = { sleepTimerMinutes = 0; showMoreMenu = false }
+                        )
+                    }
+                }
+            }
         }
         Spacer(Modifier.weight(0.7f))
         TrackArtwork(
@@ -128,7 +155,30 @@ fun FullPlayerScreen(
             }
         }
         Spacer(Modifier.weight(0.9f))
-        Text("MELO • ÇEVRİMDIŞI MÜZİK", color = Color(0xFF777184), fontSize = 10.sp, letterSpacing = 1.5.sp)
+        Text(
+            if (sleepTimerMinutes > 0) "DURKA • $sleepTimerMinutes DK SONRA DURACAK" else "DURKA • ÇEVRİMDIŞI MÜZİK",
+            color = Color(0xFF777184), fontSize = 10.sp, letterSpacing = 1.5.sp
+        )
+        if (showSleepDialog) {
+            AlertDialog(
+                onDismissRequest = { showSleepDialog = false },
+                title = { Text("Uyku zamanlayıcısı") },
+                text = { Text("Müzik ne kadar süre sonra dursun?") },
+                confirmButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(15, 30, 45, 60).forEach { minutes ->
+                            TextButton(onClick = {
+                                sleepTimerMinutes = minutes
+                                showSleepDialog = false
+                            }) { Text("$minutes") }
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSleepDialog = false }) { Text("Vazgeç") }
+                }
+            )
+        }
     }
 }
 

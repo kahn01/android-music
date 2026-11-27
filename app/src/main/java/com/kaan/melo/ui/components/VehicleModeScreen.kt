@@ -44,7 +44,7 @@ fun VehicleModeScreen(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("MELO • ARAÇ MODU", color = Color(0xFFB9A5FF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("DURKA • ARAÇ MODU", color = Color(0xFFB9A5FF), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Text("Sürüş sırasında kolay kontrol", color = Color(0xFF9AA4B2), fontSize = 12.sp)
             }
             FilledTonalIconButton(onClick = onExit, modifier = Modifier.size(58.dp)) {

@@ -22,6 +22,8 @@ import com.kaan.melo.data.local.MusicPlaylist
 import com.kaan.melo.ui.components.EmptyState
 import com.kaan.melo.ui.components.TrackArtwork
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun LibraryScreen(
@@ -51,7 +53,14 @@ fun LibraryScreen(
     var sortMenu by remember { mutableStateOf(false) }
     var addMenu by remember { mutableStateOf(false) }
 
-    val storageBytes = tracks.sumOf { File(it.localPath).takeIf(File::exists)?.length() ?: 0L }
+    var storageBytes by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(tracks) {
+        storageBytes = withContext(Dispatchers.IO) {
+            tracks.sumOf { track ->
+                runCatching { File(track.localPath).takeIf { it.isFile }?.length() ?: 0L }.getOrDefault(0L)
+            }
+        }
+    }
     val storageText = when {
         storageBytes >= 1024L * 1024L * 1024L -> "%.2f GB".format(storageBytes / (1024.0 * 1024.0 * 1024.0))
         storageBytes >= 1024L * 1024L -> "%.0f MB".format(storageBytes / (1024.0 * 1024.0))
