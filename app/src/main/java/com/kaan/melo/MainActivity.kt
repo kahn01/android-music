@@ -183,7 +183,7 @@ private fun MeloApp() {
                     DownloadScheduler.enqueue(
                         context = context,
                         url = link.trim(),
-                        title = title.ifBlank { link.substringAfterLast('/').substringBefore('?').ifBlank { "Melo parçası" } }
+                        title = if (source == MusicSource.YOUTUBE) "Bilinmeyen parça" else title.ifBlank { link.substringAfterLast('/').substringBefore('?').ifBlank { "Melo parçası" } }
                     )
                     message = "İndirme kuyruğa eklendi. Durumunu İndirmeler sekmesinden takip edebilirsin."
                     selectedTab = 1
@@ -306,7 +306,7 @@ private fun HomeScreen(
                     Text("Bağlantıyı analiz et", fontWeight = FontWeight.Bold)
                 }
                 if (message != null) {
-                    Text(message, color = if (source == MusicSource.DIRECT) Color(0xFFB8A5FF) else Color(0xFFFFB4A9), fontSize = 13.sp)
+                    Text(message, color = if (source == MusicSource.DIRECT || source == MusicSource.YOUTUBE) Color(0xFFB8A5FF) else Color(0xFFFFB4A9), fontSize = 13.sp)
                 }
                 if (source == MusicSource.SPOTIFY || source == MusicSource.DEEZER) {
                     OutlinedButton(
