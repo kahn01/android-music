@@ -175,7 +175,8 @@ private fun MeloApp() {
                     message = when (source) {
                         null -> "Bu bağlantı tanınmadı. Doğrudan MP3, WAV, FLAC, M4A, OGG veya AAC dosyası deneyebilirsin."
                         MusicSource.DIRECT -> "Doğrudan ses dosyası algılandı. İndirmeyi başlatabilirsin."
-                        else -> "${source!!.displayName} bağlantısı tanındı. Bu platformun bağlantısını tanımak, ses dosyasını indirme izni vermez."
+                        MusicSource.YOUTUBE -> "YouTube videosu algılandı. Ses akışı çözümlenip indirilecek."
+                        else -> "${source!!.displayName} bağlantısı tanındı. Bu servis için doğrudan ses dosyası indirme desteği bulunmuyor."
                     }
                 },
                 onDownload = {
@@ -307,7 +308,7 @@ private fun HomeScreen(
                 if (message != null) {
                     Text(message, color = if (source == MusicSource.DIRECT) Color(0xFFB8A5FF) else Color(0xFFFFB4A9), fontSize = 13.sp)
                 }
-                if (source != null && source != MusicSource.DIRECT) {
+                if (source == MusicSource.SPOTIFY || source == MusicSource.DEEZER) {
                     OutlinedButton(
                         onClick = onOpenSource,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -317,13 +318,9 @@ private fun HomeScreen(
                         Spacer(Modifier.width(8.dp))
                         Text("Bağlantıyı platformda aç", fontWeight = FontWeight.Bold)
                     }
-                    Text(
-                        "Test modu: bağlantı ilgili serviste açılır; korumalı yayın indirilmez.",
-                        color = Muted,
-                        fontSize = 11.sp
-                    )
+                    Text("Spotify ve Deezer'ın korumalı müzik dosyaları dışarı aktarılamaz.", color = Muted, fontSize = 11.sp)
                 }
-                if (source == MusicSource.DIRECT) {
+                if (source == MusicSource.DIRECT || source == MusicSource.YOUTUBE) {
                     Button(
                         onClick = onDownload,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -332,7 +329,7 @@ private fun HomeScreen(
                     ) {
                         Icon(Icons.Default.Download, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("İndirmeyi başlat", fontWeight = FontWeight.Bold)
+                        Text(if (source == MusicSource.YOUTUBE) "YouTube sesini indir" else "İndirmeyi başlat", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -345,7 +342,7 @@ private fun HomeScreen(
                 SourceChip("Spotify", "S")
                 SourceChip("Deezer", "D")
             }
-            Text("Bu servislerin bağlantıları tanınır; korumalı yayınlar indirilmeye çalışılmaz.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+            Text("YouTube ses indirme ve doğrudan ses dosyası indirme desteklenir.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
         }
     }
 }
