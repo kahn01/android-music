@@ -29,6 +29,13 @@ class MeloPlaybackService : MediaSessionService() {
                     true
                 )
             }
+        val settings = getSharedPreferences("durka_settings", MODE_PRIVATE)
+        settings.edit().putInt("audio_session_id", player.audioSessionId).apply()
+        player.addAnalyticsListener(object : AnalyticsListener {
+            override fun onAudioSessionIdChanged(eventTime: AnalyticsListener.EventTime, audioSessionId: Int) {
+                settings.edit().putInt("audio_session_id", audioSessionId).apply()
+            }
+        })
         mediaSession = MediaSession.Builder(this, player).build()
     }
 
