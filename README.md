@@ -1,41 +1,66 @@
 # Melo
 
-Melo is an Android-first, on-device music library and permitted-audio downloader.
+Melo, Android için geliştirilmiş çevrimdışı müzik kütüphanesi ve yerel ses oynatıcısıdır. Uygulama Kotlin, Jetpack Compose, Room, WorkManager ve AndroidX Media3 üzerine kuruludur.
 
-## Current status
+## Mevcut özellikler
 
-Initial Kotlin + Jetpack Compose scaffold:
-- Dark Compose UI and bottom navigation
-- URL host recognition for YouTube, Spotify, Deezer and direct audio-file URLs
-- Dependencies prepared for Media3, WorkManager, Room, DataStore and Retrofit
-- Minimum Android version: API 26
+- **Yerel müzik kütüphanesi:** İndirilen ses dosyalarını Room veritabanında kayıtlı tutar; parça adı ve sanatçıya göre arama yapılabilir.
+- **Çevrimdışı oynatma:** Media3 tabanlı oynatıcı ve uygulama içi mini oynatıcı.
+- **YouTube bağlantı çözümleme:** Tek video ve herkese açık oynatma listesi bağlantılarından parça bilgilerini listeleme.
+- **İndirme kuyruğu:** WorkManager ile arka plan indirmeleri, parça adı/sanatçı bilgisi, ilerleme yüzdesi ve devam eden işi iptal etme.
+- **Toplu playlist kuyruğu:** Listelenen parçaları topluca indirme kuyruğuna ekleme.
+- **Yerel çalma listeleri:** Liste oluşturma, şarkı ekleme, listeyi görüntüleme ve silme.
+- **Kaynak tanıma:** YouTube, Spotify, Deezer ve doğrudan ses dosyası bağlantılarını tanıma.
 
-**Important:** URL recognition is not stream extraction. Melo does not bypass DRM, paywalls, authentication or platform download restrictions. Metadata integrations must use supported APIs and user-authorized access. Downloads and MP3 conversion are intended for direct files and sources the user is authorized to download or convert.
+## Kaynak ve kullanım sınırları
 
-## Build
+Bağlantı tanıma, her platformdan ses akışı çıkarıldığı anlamına gelmez. Spotify ve Deezer için DRM veya oturum kısıtlamaları aşılmaz. YouTube tarafındaki çözümleme/indirme davranışı platform koşullarına ve telif haklarına tabidir. Uygulamayı yalnızca indirme ve kullanma hakkına sahip olduğun içeriklerde kullan. Doğrudan MP3, WAV, FLAC, M4A, OGG ve AAC dosyaları desteklenen indirme biçimleridir.
 
-Open this repository in Android Studio with JDK 17 and Android SDK 35, sync Gradle, then run the app.
+## Teknoloji yığını
 
-Build command (with Gradle installed):
+- Kotlin
+- Jetpack Compose + Material 3
+- Room
+- WorkManager
+- AndroidX Media3
+- Minimum Android sürümü: API 26
+- Derleme JDK'sı: 17
 
-    gradle :app:assembleDebug
+## Proje yapısı
 
-APK output: `app/build/outputs/apk/debug/app-debug.apk`
+```
+app/src/main/java/com/kaan/melo/
+├── core/                  # Bağlantı ve ortak altyapı
+├── data/local/            # Room veritabanı ve DAO'lar
+├── download/              # İndirme kuyruğu ve kaynak çözümleme
+├── feature/
+│   ├── home/              # Keşfet / bağlantı ekleme
+│   ├── downloads/         # İndirme kuyruğu ve durumları
+│   └── library/           # Yerel kütüphane ve playlist ekranı
+├── ui/components/         # Paylaşılan Compose bileşenleri
+├── MainActivity.kt        # Uygulama kabuğu, navigasyon ve durum bağlantısı
+└── MeloPlaybackService.kt # Media3 oynatma servisi
+```
 
-## Architecture
+## Derleme
 
-- `core/links`: URL parsing and source identification
-- `core/network`: future API clients
-- `core/download`: future WorkManager download pipeline
-- `core/database`: future Room persistence
-- `core/player`: future Media3 playback
-- `feature`: Compose screens
+Android Studio ile projeyi aç, Gradle senkronizasyonunu tamamla ve debug varyantını derle.
 
-## Roadmap
+Komut satırından:
 
-1. URL parsing and validation
-2. Supported metadata providers and OAuth where required
-3. Permission-aware direct audio download queue
-4. Local metadata database and media library
-5. Media3 playback and media-session controls
-6. Maintained Android-compatible FFmpeg integration for authorized local conversions
+```bash
+./gradlew :app:assembleDebug
+```
+
+APK çıktısı:
+
+```
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+## Bilinen geliştirme alanları
+
+- Tam ekran “Şimdi çalıyor” ekranı ve gelişmiş oynatma kontrolleri
+- İndirme kuyruğunda filtreleme ve daha ayrıntılı hata açıklamaları
+- Ekranların ViewModel/state katmanlarına daha fazla ayrıştırılması
+- Gerçek cihazlarda farklı Android sürümleri ve arka plan koşulları için test
