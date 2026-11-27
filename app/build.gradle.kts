@@ -14,6 +14,28 @@ android {
         versionCode = 1
         versionName = "0.1.0"
     }
+    val releaseStoreFile = System.getenv("DURKA_STORE_FILE")
+    val releaseStorePassword = System.getenv("DURKA_STORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("DURKA_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("DURKA_KEY_PASSWORD")
+    val hasReleaseSigning = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword).all { !it.isNullOrBlank() }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
+        }
+    }
     buildFeatures { compose = true }
     compileOptions {
         isCoreLibraryDesugaringEnabled = true

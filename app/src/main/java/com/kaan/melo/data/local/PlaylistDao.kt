@@ -14,6 +14,18 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlist_tracks WHERE playlistId = :playlistId ORDER BY addedAt")
     fun observePlaylistTracks(playlistId: Long): Flow<List<PlaylistTrack>>
 
+    @Query("SELECT * FROM music_playlists ORDER BY createdAt")
+    suspend fun getAllPlaylists(): List<MusicPlaylist>
+
+    @Query("SELECT * FROM playlist_tracks WHERE playlistId = :playlistId ORDER BY addedAt")
+    suspend fun getPlaylistTracks(playlistId: Long): List<PlaylistTrack>
+
+    @Query("DELETE FROM playlist_tracks")
+    suspend fun clearPlaylistTracks()
+
+    @Query("DELETE FROM music_playlists")
+    suspend fun clearPlaylists()
+
     @Insert
     suspend fun create(playlist: MusicPlaylist): Long
 

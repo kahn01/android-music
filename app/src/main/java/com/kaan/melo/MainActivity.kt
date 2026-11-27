@@ -3,6 +3,7 @@ package com.kaan.melo
 import com.kaan.melo.feature.home.HomeScreen
 import com.kaan.melo.feature.downloads.DownloadsScreen
 import com.kaan.melo.feature.library.LibraryScreen
+import com.kaan.melo.feature.settings.SettingsScreen
 import com.kaan.melo.ui.components.*
 import com.kaan.melo.player.FullPlayerScreen
 
@@ -13,6 +14,8 @@ import android.os.Build
 import android.content.Intent
 import android.content.ComponentName
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -44,6 +47,7 @@ import androidx.media3.session.SessionToken
 import androidx.core.content.ContextCompat
 import androidx.core.app.ActivityCompat
 import com.kaan.melo.data.ArtworkResolver
+import com.kaan.melo.data.LibraryBackup
 import com.kaan.melo.ui.components.TrackArtwork
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -87,12 +91,36 @@ private fun MeloApp() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val database = remember { MeloDatabase.get(context) }
+    var settingsStatus by remember { mutableStateOf<String?>(null) }
+    var audioSessionId by remember { mutableIntStateOf(context.getSharedPreferences("durka_settings", android.content.Context.MODE_PRIVATE).getInt("audio_session_id", 0)) }
+    val exportBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) coroutineScope.launch {
+            settingsStatus = "Yedek oluşturuluyor..."
+            runCatching { withContext(Dispatchers.IO) { LibraryBackup.export(context, database, uri) } }
+                .onSuccess { settingsStatus = "Yedek başarıyla oluşturuldu." }
+                .onFailure { settingsStatus = "Yedek oluşturulamadı: " + (it.message ?: "Bilinmeyen hata") }
+        }
+    }
+    val importBackupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) coroutineScope.launch {
+            settingsStatus = "Yedek geri yükleniyor..."
+            runCatching { withContext(Dispatchers.IO) { LibraryBackup.restore(context, database, uri) } }
+                .onSuccess { settingsStatus = "Yedek geri yüklendi. Cihazda bulunmayan şarkı dosyaları geri yüklenmez." }
+                .onFailure { settingsStatus = "Yedek geri yüklenemedi: " + (it.message ?: "Dosya geçersiz") }
+        }
+    }
     var player by remember { mutableStateOf<MediaController?>(null) }
     val controllerFuture = remember(context) {
         MediaController.Builder(
             context,
             SessionToken(context, ComponentName(context, MeloPlaybackService::class.java))
         ).buildAsync()
+    }
+    LaunchedEffect(player) {
+        while (true) {
+            audioSessionId = context.getSharedPreferences("durka_settings", android.content.Context.MODE_PRIVATE).getInt("audio_session_id", 0)
+            kotlinx.coroutines.delay(500)
+        }
     }
     DisposableEffect(controllerFuture) {
         controllerFuture.addListener(
@@ -257,7 +285,8 @@ private fun MeloApp() {
                 val tabs = listOf(
                     "Keşfet" to Icons.Default.Explore,
                     "İndirmeler" to Icons.Default.Download,
-                    "Kütüphane" to Icons.Default.LibraryMusic
+                    "Kütüphane" to Icons.Default.LibraryMusic,
+                    "Ayarlar" to Icons.Default.Settings
                 )
                 tabs.forEachIndexed { index, item ->
                     NavigationBarItem(
@@ -300,6 +329,7 @@ private fun MeloApp() {
                 artist = player?.mediaMetadata?.artist?.toString()?.takeIf { it.isNotBlank() } ?: currentTrack?.artist ?: "Bilinmeyen sanatçı",
                 isPlaying = isPlaying,
                 artworkUrl = currentTrack?.artworkUrl ?: player?.mediaMetadata?.artworkUri?.toString(),
+                audioSessionId = audioSessionId,
                 onBack = { showFullPlayer = false }
             )
         } else when (selectedTab) {
@@ -384,7 +414,7 @@ private fun MeloApp() {
                 jobs,
                 onCancel = { job -> WorkManager.getInstance(context).cancelWorkById(job.id) }
             )
-            else -> LibraryScreen(
+            2 -> LibraryScreen(
                 modifier = Modifier.padding(padding),
                 tracks = tracks,
                 playingTrackId = playingTrackId,
@@ -440,6 +470,12 @@ private fun MeloApp() {
                         }.onFailure { message = "Şarkı silinemedi. Tekrar deneyebilirsin." }
                     }
                 }
+            )
+            else -> SettingsScreen(
+                modifier = Modifier.padding(padding),
+                statusMessage = settingsStatus,
+                onExportBackup = { exportBackupLauncher.launch("durka-yedek.json") },
+                onImportBackup = { importBackupLauncher.launch(arrayOf("application/json", "text/json")) }
             )
         }
     }

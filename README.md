@@ -64,3 +64,15 @@ app/build/outputs/apk/debug/app-debug.apk
 - İndirme kuyruğunda filtreleme ve daha ayrıntılı hata açıklamaları
 - Ekranların ViewModel/state katmanlarına daha fazla ayrıştırılması
 - Gerçek cihazlarda farklı Android sürümleri ve arka plan koşulları için test
+
+
+## Durka release signing
+
+GitHub Actions builds a debug APK and a release AAB. To make the AAB publishable, configure these repository Actions secrets:
+
+- `DURKA_KEYSTORE_BASE64`: base64-encoded Android upload keystore.
+- `DURKA_STORE_PASSWORD`: keystore password.
+- `DURKA_KEY_ALIAS`: key alias.
+- `DURKA_KEY_PASSWORD`: key password.
+
+Create and protect the upload keystore yourself. Never commit the keystore or passwords to the repository. Without these secrets, CI can build an **unsigned** AAB for verification, but it cannot be uploaded to Google Play.

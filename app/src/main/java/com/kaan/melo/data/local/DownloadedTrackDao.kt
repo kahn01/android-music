@@ -28,4 +28,7 @@ interface DownloadedTrackDao {
 
     @Query("SELECT * FROM downloaded_tracks WHERE id = :trackId LIMIT 1")
     suspend fun findById(trackId: Long): DownloadedTrack?
+
+    @Query("SELECT id FROM downloaded_tracks WHERE sourceUrl = :sourceUrl LIMIT 1")
+    suspend fun findIdBySourceUrl(sourceUrl: String): Long?
 }

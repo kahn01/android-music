@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Durka.Starting" parent="Theme.Durka">
+        <item name="android:windowSplashScreenBackground">#09090F</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_durka_foreground</item>
+        <item name="android:postSplashScreenTheme">@style/Theme.Durka</item>
+    </style>
+</resources>
