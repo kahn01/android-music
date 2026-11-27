@@ -1,5 +1,6 @@
 package com.kaan.melo.download
 
+import android.net.Uri
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaType
@@ -15,6 +16,17 @@ data class ResolvedYoutubeAudio(
     val title: String,
     val artist: String,
     val extension: String
+)
+
+data class YoutubePlaylistItem(
+    val title: String,
+    val url: String,
+    val artist: String
+)
+
+data class ResolvedYoutubePlaylist(
+    val title: String,
+    val items: List<YoutubePlaylistItem>
 )
 
 object YoutubeAudioResolver {
@@ -62,6 +74,43 @@ object YoutubeAudioResolver {
             })
             initialized = true
         }
+    }
+
+    fun isPlaylistUrl(raw: String): Boolean {
+        val uri = runCatching { Uri.parse(raw.trim()) }.getOrNull() ?: return false
+        val host = uri.host?.lowercase()?.removePrefix("www.")
+        return host in setOf("youtube.com", "m.youtube.com", "music.youtube.com") &&
+            !uri.getQueryParameter("list").isNullOrBlank()
+    }
+
+    fun resolvePlaylist(playlistUrl: String): ResolvedYoutubePlaylist {
+        initialize()
+        val extractor = ServiceList.YouTube.getPlaylistExtractor(playlistUrl)
+        extractor.fetchPage()
+
+        val items = mutableListOf<YoutubePlaylistItem>()
+        var page = extractor.initialPage
+        var pagesRead = 0
+        while (true) {
+            page.items.forEach { item ->
+                if (items.size < 300 && item.url.isNotBlank()) {
+                    items += YoutubePlaylistItem(
+                        title = item.name.ifBlank { "Bilinmeyen parça" },
+                        url = item.url,
+                        artist = item.uploaderName.ifBlank { "YouTube" }
+                    )
+                }
+            }
+            pagesRead++
+            val next = page.nextPage
+            if (next == null || items.size >= 300 || pagesRead >= 20) break
+            page = extractor.getPage(next)
+        }
+
+        return ResolvedYoutubePlaylist(
+            title = extractor.name.ifBlank { "YouTube oynatma listesi" },
+            items = items.distinctBy { it.url }
+        )
     }
 
     fun resolve(videoUrl: String): ResolvedYoutubeAudio {
