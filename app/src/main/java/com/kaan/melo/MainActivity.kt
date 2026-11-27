@@ -348,8 +348,21 @@ private fun DownloadsScreen(modifier: Modifier, jobs: List<WorkInfo>) {
                         Column(Modifier.weight(1f)) {
                             Text(job.workSpecIdShort(), fontWeight = FontWeight.SemiBold)
                             Text(label, color = Muted, fontSize = 12.sp)
+                            if (job.state == WorkInfo.State.RUNNING) {
+                                val progress = job.progress.getInt("progress", 0)
+                                Spacer(Modifier.height(7.dp))
+                                LinearProgressIndicator(
+                                    progress = progress / 100f,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = Accent,
+                                    trackColor = Color(0xFF393344)
+                                )
+                                Text("$progress%", color = Muted, fontSize = 10.sp)
+                            }
                         }
-                        if (job.state == WorkInfo.State.RUNNING) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        if (job.state == WorkInfo.State.ENQUEUED || job.state == WorkInfo.State.BLOCKED) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        }
                     }
                 }
             }
