@@ -62,6 +62,7 @@ class DirectAudioDownloadWorker(
                 temp.outputStream().buffered().use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     var total = 0L
+                    var lastReportedProgress = -1
                     while (true) {
                         if (isStopped) {
                             temp.delete()
@@ -75,6 +76,13 @@ class DirectAudioDownloadWorker(
                             return@withContext Result.failure()
                         }
                         output.write(buffer, 0, read)
+                        if (length > 0L) {
+                            val progress = ((total * 100L) / length).toInt().coerceIn(0, 100)
+                            if (progress != lastReportedProgress) {
+                                setProgress(androidx.work.Data.Builder().putInt(KEY_PROGRESS, progress).build())
+                                lastReportedProgress = progress
+                            }
+                        }
                     }
                 }
             }
@@ -118,6 +126,7 @@ class DirectAudioDownloadWorker(
         const val KEY_URL = "url"
         const val KEY_TITLE = "title"
         const val KEY_ARTIST = "artist"
+        const val KEY_PROGRESS = "progress"
         private const val MAX_BYTES = 250L * 1024L * 1024L
     }
 }
