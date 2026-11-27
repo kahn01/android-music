@@ -32,6 +32,13 @@ class DirectAudioDownloadWorker(
                 title = resolved.title
                 artist = resolved.artist
                 extensionHint = resolved.extension
+                setProgress(
+                    androidx.work.Data.Builder()
+                        .putString(KEY_TITLE, title)
+                        .putString(KEY_ARTIST, artist)
+                        .putInt(KEY_PROGRESS, 0)
+                        .build()
+                )
             } catch (_: Exception) {
                 return@withContext Result.failure(
                     androidx.work.Data.Builder().putString("error", "YouTube bağlantısı çözümlenemedi. Video özel, yaş kısıtlı veya geçici olarak desteklenmiyor olabilir.").build()
@@ -105,6 +112,8 @@ class DirectAudioDownloadWorker(
                             if (progress != lastReportedProgress) {
                                 setProgress(
                                     androidx.work.Data.Builder()
+                                        .putString(KEY_TITLE, title)
+                                        .putString(KEY_ARTIST, artist)
                                         .putInt(KEY_PROGRESS, progress)
                                         .build()
                                 )
@@ -134,7 +143,13 @@ class DirectAudioDownloadWorker(
                     mimeType = mime.ifBlank { "audio/$extension" }
                 )
             )
-            setProgress(androidx.work.Data.Builder().putInt(KEY_PROGRESS, 100).build())
+            setProgress(
+                androidx.work.Data.Builder()
+                    .putString(KEY_TITLE, title)
+                    .putString(KEY_ARTIST, artist)
+                    .putInt(KEY_PROGRESS, 100)
+                    .build()
+            )
             Result.success()
         } catch (_: Exception) {
             tempFile?.delete()
