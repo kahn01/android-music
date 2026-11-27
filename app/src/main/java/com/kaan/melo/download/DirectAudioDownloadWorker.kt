@@ -63,6 +63,7 @@ class DirectAudioDownloadWorker(
 
         var connection: HttpURLConnection? = null
         var tempFile: File? = null
+        var finalTarget: File? = null
         try {
             connection = URL(resolvedUrl).openConnection() as HttpURLConnection
             connection.connectTimeout = 15_000
@@ -96,6 +97,7 @@ class DirectAudioDownloadWorker(
             val safeName = title.replace(Regex("[^A-Za-z0-9._ -]"), "_")
                 .trim().take(70).ifBlank { "track" }
             val target = File(directory, "${System.currentTimeMillis()}-$safeName.$extension")
+            finalTarget = target
             tempFile = File(directory, target.name + ".part")
 
             connection.inputStream.use { input ->
@@ -162,8 +164,13 @@ class DirectAudioDownloadWorker(
                     .build()
             )
             Result.success()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            runCatching { tempFile?.delete() }
+            runCatching { finalTarget?.delete() }
+            throw cancelled
         } catch (_: Exception) {
-            tempFile?.delete()
+            runCatching { tempFile?.delete() }
+            runCatching { finalTarget?.delete() }
             Result.retry()
         } finally {
             connection?.disconnect()
