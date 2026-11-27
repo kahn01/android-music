@@ -12,7 +12,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Downloads a directly accessible audio file; does not extract platform streams or bypass DRM. */
+/** Downloads direct audio URLs and resolves public YouTube audio streams before saving them. */
 class DirectAudioDownloadWorker(
     appContext: Context,
     params: WorkerParameters
