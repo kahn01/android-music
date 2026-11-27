@@ -25,6 +25,14 @@ class DirectAudioDownloadWorker(
         var artist = inputData.getString(KEY_ARTIST)
         var extensionHint: String? = null
 
+        setProgress(
+            androidx.work.Data.Builder()
+                .putString(KEY_TITLE, title)
+                .putString(KEY_ARTIST, artist)
+                .putInt(KEY_PROGRESS, 0)
+                .build()
+        )
+
         if (isYouTubeUrl(sourceUrl)) {
             try {
                 val resolved = com.kaan.melo.download.YoutubeAudioResolver.resolve(sourceUrl)
