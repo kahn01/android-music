@@ -27,18 +27,11 @@ class DirectAudioDownloadWorker(
 
         if (isYouTubeUrl(sourceUrl)) {
             try {
-                io.github.shalva97.initNewPipe()
-                val extractor = org.schabi.newpipe.extractor.ServiceList.YouTube
-                    .getStreamExtractor(sourceUrl)
-                extractor.fetchPage()
-                val audio = extractor.audioStreams.maxByOrNull { it.averageBitrate }
-                    ?: return@withContext Result.failure(
-                        androidx.work.Data.Builder().putString("error", "Bu videoda indirilebilir ses akışı bulunamadı.").build()
-                    )
-                resolvedUrl = audio.content
-                if (title == "Bilinmeyen parça") title = extractor.name
-                artist = extractor.uploaderName
-                extensionHint = if (audio.codec?.contains("opus", ignoreCase = true) == true) "webm" else "m4a"
+                val resolved = com.kaan.melo.download.YoutubeAudioResolver.resolve(sourceUrl)
+                resolvedUrl = resolved.url
+                title = resolved.title
+                artist = resolved.artist
+                extensionHint = resolved.extension
             } catch (_: Exception) {
                 return@withContext Result.failure(
                     androidx.work.Data.Builder().putString("error", "YouTube bağlantısı çözümlenemedi. Video özel, yaş kısıtlı veya geçici olarak desteklenmiyor olabilir.").build()
