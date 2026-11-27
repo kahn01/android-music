@@ -105,6 +105,20 @@ private fun MeloApp() {
     var playlistTitle by remember { mutableStateOf<String?>(null) }
     var playlistItems by remember { mutableStateOf<List<com.kaan.melo.download.YoutubePlaylistItem>>(emptyList()) }
     var resolvingPlaylist by remember { mutableStateOf(false) }
+    val playlists by database.playlistDao().observePlaylists().collectAsState(initial = emptyList())
+    var selectedLibrarySection by remember { mutableStateOf("Şarkılar") }
+    var libraryQuery by remember { mutableStateOf("") }
+    var showCreatePlaylist by remember { mutableStateOf(false) }
+    var newPlaylistName by remember { mutableStateOf("") }
+    var selectedPlaylistId by remember { mutableStateOf<Long?>(null) }
+    var selectedPlaylistTrackIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    LaunchedEffect(selectedPlaylistId) {
+        val id = selectedPlaylistId
+        if (id == null) selectedPlaylistTrackIds = emptySet()
+        else database.playlistDao().observePlaylistTracks(id).collect { rows ->
+            selectedPlaylistTrackIds = rows.map { it.trackId }.toSet()
+        }
+    }
 
     DisposableEffect(player) {
         val activePlayer = player
@@ -244,6 +258,22 @@ private fun MeloApp() {
                 tracks = tracks,
                 playingTrackId = playingTrackId,
                 isPlaying = isPlaying,
+                playlists = playlists,
+                selectedPlaylistId = selectedPlaylistId,
+                selectedPlaylistTrackIds = selectedPlaylistTrackIds,
+                libraryQuery = libraryQuery,
+                onLibraryQueryChange = { libraryQuery = it },
+                selectedLibrarySection = selectedLibrarySection,
+                onSectionChange = { selectedLibrarySection = it },
+                onSelectPlaylist = { selectedPlaylistId = it; selectedLibrarySection = "Şarkılar" },
+                onCreatePlaylistClick = { showCreatePlaylist = true },
+                onAddToPlaylist = { playlistId, trackId ->
+                    coroutineScope.launch { database.playlistDao().addTrack(com.kaan.melo.data.local.PlaylistTrack(playlistId, trackId)) }
+                },
+                onDeletePlaylist = { id ->
+                    coroutineScope.launch { database.playlistDao().deletePlaylist(id) }
+                    if (selectedPlaylistId == id) selectedPlaylistId = null
+                },
                 onPlay = ::playTrack,
                 onDelete = { track ->
                     if (playingTrackId == track.id) {
@@ -259,6 +289,33 @@ private fun MeloApp() {
             )
         }
     }
+    if (showCreatePlaylist) {
+        AlertDialog(
+            onDismissRequest = { showCreatePlaylist = false; newPlaylistName = "" },
+            title = { Text("Yeni çalma listesi") },
+            text = {
+                OutlinedTextField(
+                    value = newPlaylistName,
+                    onValueChange = { newPlaylistName = it },
+                    singleLine = true,
+                    label = { Text("Liste adı") },
+                    colors = fieldColors()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = newPlaylistName.trim()
+                    if (name.isNotEmpty()) coroutineScope.launch {
+                        database.playlistDao().create(com.kaan.melo.data.local.MusicPlaylist(name = name))
+                    }
+                    showCreatePlaylist = false
+                    newPlaylistName = ""
+                }) { Text("Oluştur") }
+            },
+            dismissButton = { TextButton(onClick = { showCreatePlaylist = false; newPlaylistName = "" }) { Text("İptal") } }
+        )
+    }
+
 }
 
 @Composable
