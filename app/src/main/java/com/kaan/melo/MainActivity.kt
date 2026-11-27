@@ -42,6 +42,8 @@ import com.kaan.melo.data.local.MeloDatabase
 import com.kaan.melo.download.DownloadScheduler
 import java.io.File
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val Background = Color(0xFF09090F)
 private val SurfaceDark = Color(0xFF171722)
@@ -100,6 +102,9 @@ private fun MeloApp() {
     var source by remember { mutableStateOf<MusicSource?>(null) }
     var playingTrackId by remember { mutableStateOf<Long?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
+    var playlistTitle by remember { mutableStateOf<String?>(null) }
+    var playlistItems by remember { mutableStateOf<List<com.kaan.melo.download.YoutubePlaylistItem>>(emptyList()) }
+    var resolvingPlaylist by remember { mutableStateOf(false) }
 
     DisposableEffect(player) {
         val activePlayer = player
@@ -167,17 +172,52 @@ private fun MeloApp() {
             0 -> HomeScreen(
                 modifier = Modifier.padding(padding),
                 link = link,
-                onLinkChange = { link = it; message = null; source = null },
+                onLinkChange = { link = it; message = null; source = null; playlistTitle = null; playlistItems = emptyList() },
                 title = title,
                 onTitleChange = { title = it },
                 onAnalyze = {
                     source = LinkParser.parse(link)
-                    message = when (source) {
-                        null -> "Bu bağlantı tanınmadı. Doğrudan MP3, WAV, FLAC, M4A, OGG veya AAC dosyası deneyebilirsin."
-                        MusicSource.DIRECT -> "Doğrudan ses dosyası algılandı. İndirmeyi başlatabilirsin."
-                        MusicSource.YOUTUBE -> "YouTube videosu algılandı. Ses akışı çözümlenip indirilecek."
-                        else -> "${source!!.displayName} bağlantısı tanındı. Bu servis için doğrudan ses dosyası indirme desteği bulunmuyor."
+                    playlistTitle = null
+                    playlistItems = emptyList()
+                    if (source == MusicSource.YOUTUBE && com.kaan.melo.download.YoutubeAudioResolver.isPlaylistUrl(link)) {
+                        resolvingPlaylist = true
+                        message = "Oynatma listesi çözümleniyor..."
+                        coroutineScope.launch {
+                            try {
+                                val result = withContext(Dispatchers.IO) {
+                                    com.kaan.melo.download.YoutubeAudioResolver.resolvePlaylist(link.trim())
+                                }
+                                playlistTitle = result.title
+                                playlistItems = result.items
+                                message = if (result.items.isEmpty()) "Bu oynatma listesinde görüntülenebilir parça bulunamadı."
+                                    else "${result.items.size} parça listelendi. İndirme hakkına sahip olduğun parçaları tek tek seçebilirsin."
+                            } catch (error: Exception) {
+                                message = "Playlist çözümlenemedi: ${error.message ?: "YouTube geçici olarak yanıt vermedi."}"
+                            } finally {
+                                resolvingPlaylist = false
+                            }
+                        }
+                    } else {
+                        message = when (source) {
+                            null -> "Bu bağlantı tanınmadı. Doğrudan MP3, WAV, FLAC, M4A, OGG veya AAC dosyası deneyebilirsin."
+                            MusicSource.DIRECT -> "Doğrudan ses dosyası algılandı. İndirmeyi başlatabilirsin."
+                            MusicSource.YOUTUBE -> "YouTube videosu algılandı. Bağlantıyı çözümleyip işleme alabilirsin."
+                            else -> "${source!!.displayName} bağlantısı tanındı. Bu servis için doğrudan ses dosyası indirme desteği bulunmuyor."
+                        }
                     }
+                },
+                playlistTitle = playlistTitle,
+                playlistItems = playlistItems,
+                resolvingPlaylist = resolvingPlaylist,
+                onDownloadPlaylistTrack = { track ->
+                    DownloadScheduler.enqueue(
+                        context = context,
+                        url = track.url,
+                        title = track.title,
+                        artist = track.artist
+                    )
+                    message = "${track.title} indirme kuyruğuna eklendi."
+                    selectedTab = 1
                 },
                 onDownload = {
                     DownloadScheduler.enqueue(
@@ -232,7 +272,11 @@ private fun HomeScreen(
     onDownload: () -> Unit,
     onOpenSource: () -> Unit,
     message: String?,
-    source: MusicSource?
+    source: MusicSource?,
+    playlistTitle: String?,
+    playlistItems: List<com.kaan.melo.download.YoutubePlaylistItem>,
+    resolvingPlaylist: Boolean,
+    onDownloadPlaylistTrack: (com.kaan.melo.download.YoutubePlaylistItem) -> Unit
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -305,8 +349,36 @@ private fun HomeScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Bağlantıyı analiz et", fontWeight = FontWeight.Bold)
                 }
+                if (resolvingPlaylist) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Accent)
+                        Text("Playlist parçaları alınıyor...", color = Muted, fontSize = 12.sp)
+                    }
+                }
                 if (message != null) {
                     Text(message, color = if (source == MusicSource.DIRECT || source == MusicSource.YOUTUBE) Color(0xFFB8A5FF) else Color(0xFFFFB4A9), fontSize = 13.sp)
+                }
+                if (playlistTitle != null) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(playlistTitle, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Text("${playlistItems.size} parça", color = Muted, fontSize = 12.sp)
+                        playlistItems.forEachIndexed { index, track ->
+                            Row(
+                                Modifier.fillMaxWidth().background(SurfaceDark, RoundedCornerShape(14.dp)).padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("${index + 1}", color = Accent, fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(track.title, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                                    Text(track.artist, color = Muted, fontSize = 11.sp, maxLines = 1)
+                                }
+                                IconButton(onClick = { onDownloadPlaylistTrack(track) }) {
+                                    Icon(Icons.Default.Download, contentDescription = "İndir", tint = Accent)
+                                }
+                            }
+                        }
+                        Text("Yalnızca indirme hakkına sahip olduğun veya indirilmesine izin verilen içerikleri indir.", color = Muted, fontSize = 10.sp)
+                    }
                 }
                 if (source == MusicSource.SPOTIFY || source == MusicSource.DEEZER) {
                     OutlinedButton(
@@ -320,7 +392,7 @@ private fun HomeScreen(
                     }
                     Text("Spotify ve Deezer'ın korumalı müzik dosyaları dışarı aktarılamaz.", color = Muted, fontSize = 11.sp)
                 }
-                if (source == MusicSource.DIRECT || source == MusicSource.YOUTUBE) {
+                if (source == MusicSource.DIRECT || (source == MusicSource.YOUTUBE && playlistTitle == null && !resolvingPlaylist)) {
                     Button(
                         onClick = onDownload,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
