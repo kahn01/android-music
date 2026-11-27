@@ -4,6 +4,7 @@ import com.kaan.melo.feature.home.HomeScreen
 import com.kaan.melo.feature.downloads.DownloadsScreen
 import com.kaan.melo.feature.library.LibraryScreen
 import com.kaan.melo.ui.components.*
+import com.kaan.melo.player.FullPlayerScreen
 
 import android.os.Bundle
 import android.content.Intent
@@ -101,6 +102,7 @@ private fun MeloApp() {
         .getWorkInfosByTagLiveData(DownloadScheduler.TAG_DOWNLOAD)
         .observeAsState(initial = emptyList())
     var selectedTab by remember { mutableIntStateOf(0) }
+    var showFullPlayer by remember { mutableStateOf(false) }
     var link by remember { mutableStateOf("") }
     var title by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
@@ -163,13 +165,13 @@ private fun MeloApp() {
     Scaffold(
         containerColor = Background,
         bottomBar = {
-            Column {
+            if (!showFullPlayer) Column {
                 val currentTrack = tracks.firstOrNull { it.id == playingTrackId }
                 if (currentTrack != null) {
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
                             .background(Color(0xFF28203F), RoundedCornerShape(15.dp))
-                            .clickable { selectedTab = 2 }.padding(horizontal = 13.dp, vertical = 8.dp),
+                            .clickable { showFullPlayer = true }.padding(horizontal = 13.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(Modifier.size(38.dp).background(Color(0xFF49366F), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
@@ -213,7 +215,16 @@ private fun MeloApp() {
             }
         }
     ) { padding ->
-        when (selectedTab) {
+        if (showFullPlayer) {
+            val currentTrack = tracks.firstOrNull { it.id == playingTrackId }
+            FullPlayerScreen(
+                player = player,
+                title = player?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() } ?: currentTrack?.title ?: "Şimdi çalıyor",
+                artist = player?.mediaMetadata?.artist?.toString()?.takeIf { it.isNotBlank() } ?: currentTrack?.artist ?: "Bilinmeyen sanatçı",
+                isPlaying = isPlaying,
+                onBack = { showFullPlayer = false }
+            )
+        } else when (selectedTab) {
             0 -> HomeScreen(
                 modifier = Modifier.padding(padding),
                 link = link,
