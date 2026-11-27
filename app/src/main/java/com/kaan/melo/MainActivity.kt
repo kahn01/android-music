@@ -7,6 +7,9 @@ import com.kaan.melo.ui.components.*
 import com.kaan.melo.player.FullPlayerScreen
 
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.content.Intent
 import android.content.ComponentName
 import androidx.activity.ComponentActivity
@@ -39,6 +42,9 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.core.content.ContextCompat
+import androidx.core.app.ActivityCompat
+import com.kaan.melo.data.ArtworkResolver
+import com.kaan.melo.ui.components.TrackArtwork
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.kaan.melo.core.links.LinkParser
@@ -119,6 +125,7 @@ private fun MeloApp() {
     var newPlaylistName by remember { mutableStateOf("") }
     var selectedPlaylistId by remember { mutableStateOf<Long?>(null) }
     var selectedPlaylistTrackIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val artworkLookupAttempts = remember { mutableSetOf<Long>() }
     LaunchedEffect(selectedPlaylistId) {
         val id = selectedPlaylistId
         if (id == null) selectedPlaylistTrackIds = emptySet()
@@ -127,10 +134,25 @@ private fun MeloApp() {
         }
     }
 
+    LaunchedEffect(tracks) {
+        tracks.filter { it.artworkUrl.isNullOrBlank() && artworkLookupAttempts.add(it.id) }
+            .forEach { track ->
+                val artwork = withContext(Dispatchers.IO) {
+                    runCatching { ArtworkResolver.findArtwork(track.title, track.artist) }.getOrNull()
+                }
+                if (!artwork.isNullOrBlank()) database.downloadedTrackDao().updateArtwork(track.id, artwork)
+            }
+    }
+
     DisposableEffect(player) {
         val activePlayer = player
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val id = mediaItem?.mediaId?.toLongOrNull() ?: return
+                playingTrackId = id
+                coroutineScope.launch { database.downloadedTrackDao().recordPlay(id) }
+            }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) isPlaying = false
             }
@@ -141,6 +163,9 @@ private fun MeloApp() {
 
     fun playTrack(track: DownloadedTrack) {
         val activePlayer = player ?: return
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && context is android.app.Activity) {
+            ActivityCompat.requestPermissions(context, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1002)
+        }
         if (playingTrackId == track.id) {
             if (activePlayer.isPlaying) activePlayer.pause() else activePlayer.play()
         } else {
@@ -149,8 +174,10 @@ private fun MeloApp() {
                 val metadata = MediaMetadata.Builder()
                     .setTitle(item.title)
                     .setArtist(item.artist ?: "Melo")
+                    .apply { item.artworkUrl?.let { setArtworkUri(android.net.Uri.parse(it)) } }
                     .build()
                 MediaItem.Builder()
+                    .setMediaId(item.id.toString())
                     .setUri(android.net.Uri.fromFile(File(item.localPath)))
                     .setMediaMetadata(metadata)
                     .build()
@@ -174,9 +201,7 @@ private fun MeloApp() {
                             .clickable { showFullPlayer = true }.padding(horizontal = 13.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(Modifier.size(38.dp).background(Color(0xFF49366F), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.MusicNote, null, tint = Accent)
-                        }
+                        TrackArtwork(currentTrack.artworkUrl, Modifier.size(42.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(currentTrack.title, fontWeight = FontWeight.SemiBold, maxLines = 1, fontSize = 13.sp)
@@ -222,6 +247,7 @@ private fun MeloApp() {
                 title = player?.mediaMetadata?.title?.toString()?.takeIf { it.isNotBlank() } ?: currentTrack?.title ?: "Şimdi çalıyor",
                 artist = player?.mediaMetadata?.artist?.toString()?.takeIf { it.isNotBlank() } ?: currentTrack?.artist ?: "Bilinmeyen sanatçı",
                 isPlaying = isPlaying,
+                artworkUrl = currentTrack?.artworkUrl ?: player?.mediaMetadata?.artworkUri?.toString(),
                 onBack = { showFullPlayer = false }
             )
         } else when (selectedTab) {
@@ -328,6 +354,17 @@ private fun MeloApp() {
                     if (selectedPlaylistId == id) selectedPlaylistId = null
                 },
                 onPlay = ::playTrack,
+                onBulkDelete = { ids ->
+                    val selected = tracks.filter { it.id in ids }
+                    selected.forEach { track ->
+                        if (playingTrackId == track.id) { player?.stop(); playingTrackId = null; isPlaying = false }
+                        File(track.localPath).delete()
+                    }
+                    coroutineScope.launch { database.downloadedTrackDao().deleteByIds(ids) }
+                },
+                onRemoveFromPlaylist = { playlistId, trackId ->
+                    coroutineScope.launch { database.playlistDao().removeTrack(playlistId, trackId) }
+                },
                 onDelete = { track ->
                     if (playingTrackId == track.id) {
                         player?.stop()
