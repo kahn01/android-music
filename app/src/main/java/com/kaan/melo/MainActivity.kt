@@ -118,16 +118,18 @@ private fun MeloApp() {
             if (activePlayer.isPlaying) activePlayer.pause() else activePlayer.play()
         } else {
             playingTrackId = track.id
-            val metadata = MediaMetadata.Builder()
-                .setTitle(track.title)
-                .setArtist(track.artist ?: "Melo")
-                .build()
-            activePlayer.setMediaItem(
+            val queue = tracks.map { item ->
+                val metadata = MediaMetadata.Builder()
+                    .setTitle(item.title)
+                    .setArtist(item.artist ?: "Melo")
+                    .build()
                 MediaItem.Builder()
-                    .setUri(android.net.Uri.fromFile(File(track.localPath)))
+                    .setUri(android.net.Uri.fromFile(File(item.localPath)))
                     .setMediaMetadata(metadata)
                     .build()
-            )
+            }
+            val startIndex = tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+            activePlayer.setMediaItems(queue, startIndex, 0L)
             activePlayer.prepare()
             activePlayer.play()
         }
