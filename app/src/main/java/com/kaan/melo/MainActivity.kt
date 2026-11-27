@@ -152,7 +152,9 @@ private fun MeloApp() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val id = mediaItem?.mediaId?.toLongOrNull() ?: return
                 playingTrackId = id
-                coroutineScope.launch { database.downloadedTrackDao().recordPlay(id, System.currentTimeMillis()) }
+                coroutineScope.launch {
+                    runCatching { database.downloadedTrackDao().recordPlay(id, System.currentTimeMillis()) }
+                }
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) isPlaying = false
@@ -162,8 +164,19 @@ private fun MeloApp() {
         onDispose { activePlayer?.removeListener(listener) }
     }
 
+    LaunchedEffect(Unit) {
+        runCatching { WorkManager.getInstance(context).pruneWork() }
+    }
+
     fun playTrack(track: DownloadedTrack) {
         val activePlayer = player ?: return
+        if (!File(track.localPath).isFile) {
+            coroutineScope.launch {
+                runCatching { database.downloadedTrackDao().deleteById(track.id) }
+            }
+            message = "Bu şarkının dosyası bulunamadı; kütüphaneden kaldırıldı."
+            return
+        }
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED && context is android.app.Activity) {
             ActivityCompat.requestPermissions(context, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1002)
         }
@@ -171,7 +184,12 @@ private fun MeloApp() {
             if (activePlayer.isPlaying) activePlayer.pause() else activePlayer.play()
         } else {
             playingTrackId = track.id
-            val queue = tracks.map { item ->
+            val playableTracks = tracks.filter { File(it.localPath).isFile }
+            if (playableTracks.isEmpty()) {
+                message = "Çalınabilir müzik dosyası bulunamadı."
+                return
+            }
+            val queue = playableTracks.map { item ->
                 val metadata = MediaMetadata.Builder()
                     .setTitle(item.title)
                     .setArtist(item.artist ?: "Melo")
@@ -183,15 +201,34 @@ private fun MeloApp() {
                     .setMediaMetadata(metadata)
                     .build()
             }
-            val startIndex = tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-            activePlayer.setMediaItems(queue, startIndex, 0L)
-            activePlayer.prepare()
-            activePlayer.play()
+            val startIndex = playableTracks.indexOfFirst { it.id == track.id }
+            if (startIndex < 0) {
+                message = "Şarkı oynatma kuyruğuna eklenemedi."
+                return
+            }
+            runCatching {
+                activePlayer.setMediaItems(queue, startIndex, 0L)
+                activePlayer.prepare()
+                activePlayer.play()
+            }.onFailure {
+                message = "Şarkı başlatılamadı. Dosya biçimini kontrol et."
+            }
         }
     }
 
     Scaffold(
         containerColor = Background,
+        floatingActionButton = {
+            if (!showFullPlayer && !vehicleMode) {
+                ExtendedFloatingActionButton(
+                    onClick = { vehicleMode = true },
+                    icon = { Icon(Icons.Default.DirectionsCar, contentDescription = null) },
+                    text = { Text("Araç modu") },
+                    containerColor = Color(0xFF392B5D),
+                    contentColor = Color.White
+                )
+            }
+        },
         bottomBar = {
             if (!showFullPlayer && !vehicleMode) Column {
                 val currentTrack = tracks.firstOrNull { it.id == playingTrackId }
@@ -241,7 +278,21 @@ private fun MeloApp() {
             }
         }
     ) { padding ->
-        if (showFullPlayer) {
+        if (vehicleMode) {
+            val currentIndex = tracks.indexOfFirst { it.id == playingTrackId }
+            val currentTrack = tracks.getOrNull(currentIndex)
+            val nextTrack = tracks.getOrNull(currentIndex + 1)
+            VehicleModeScreen(
+                player = player,
+                currentTrack = currentTrack,
+                nextTrack = nextTrack,
+                isPlaying = isPlaying,
+                onPrevious = { if (player?.hasPreviousMediaItem() == true) player?.seekToPreviousMediaItem() },
+                onPlayPause = { player?.let { if (it.isPlaying) it.pause() else it.play() } },
+                onNext = { if (player?.hasNextMediaItem() == true) player?.seekToNextMediaItem() },
+                onExit = { vehicleMode = false }
+            )
+        } else if (showFullPlayer) {
             val currentTrack = tracks.firstOrNull { it.id == playingTrackId }
             FullPlayerScreen(
                 player = player,
@@ -356,12 +407,22 @@ private fun MeloApp() {
                 },
                 onPlay = ::playTrack,
                 onBulkDelete = { ids ->
-                    val selected = tracks.filter { it.id in ids }
-                    selected.forEach { track ->
-                        if (playingTrackId == track.id) { player?.stop(); playingTrackId = null; isPlaying = false }
-                        File(track.localPath).delete()
+                    if (ids.isNotEmpty()) {
+                        val selected = tracks.filter { it.id in ids }
+                        if (playingTrackId in ids) {
+                            player?.stop()
+                            playingTrackId = null
+                            isPlaying = false
+                        }
+                        coroutineScope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    selected.forEach { track -> runCatching { File(track.localPath).delete() } }
+                                }
+                                database.downloadedTrackDao().deleteByIds(ids)
+                            }.onFailure { message = "Bazı parçalar silinemedi. Tekrar deneyebilirsin." }
+                        }
                     }
-                    coroutineScope.launch { database.downloadedTrackDao().deleteByIds(ids) }
                 },
                 onRemoveFromPlaylist = { playlistId, trackId ->
                     coroutineScope.launch { database.playlistDao().removeTrack(playlistId, trackId) }
@@ -373,8 +434,10 @@ private fun MeloApp() {
                         isPlaying = false
                     }
                     coroutineScope.launch {
-                        database.downloadedTrackDao().deleteById(track.id)
-                        File(track.localPath).delete()
+                        runCatching {
+                            withContext(Dispatchers.IO) { runCatching { File(track.localPath).delete() } }
+                            database.downloadedTrackDao().deleteById(track.id)
+                        }.onFailure { message = "Şarkı silinemedi. Tekrar deneyebilirsin." }
                     }
                 }
             )
