@@ -302,7 +302,7 @@ private fun MeloApp() {
                 onLibraryQueryChange = { libraryQuery = it },
                 selectedLibrarySection = selectedLibrarySection,
                 onSectionChange = { selectedLibrarySection = it },
-                onSelectPlaylist = { selectedPlaylistId = it; selectedLibrarySection = "Şarkılar" },
+                onSelectPlaylist = { selectedPlaylistId = it },
                 onCreatePlaylistClick = { showCreatePlaylist = true },
                 onAddToPlaylist = { playlistId, trackId ->
                     coroutineScope.launch { database.playlistDao().addTrack(com.kaan.melo.data.local.PlaylistTrack(playlistId, trackId)) }
@@ -647,7 +647,7 @@ private fun LibraryScreen(
                 Text("${tracks.size} kayıtlı parça · çevrimdışı dinleme", color = Muted, modifier = Modifier.padding(top = 5.dp, bottom = 16.dp))
             }
             FilledTonalButton(
-                onClick = { onSectionChange("Çalma listeleri"); onSelectPlaylist(null); onCreatePlaylistClick() },
+                onClick = { onSectionChange("Çalma listeleri"); onCreatePlaylistClick() },
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -699,7 +699,7 @@ private fun LibraryScreen(
                 if (playlists.isEmpty()) EmptyState(Icons.Default.QueueMusic, "Henüz çalma listen yok", "Yeni liste oluşturup şarkılarını içine ekleyebilirsin.")
                 else LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     items(playlists, key = { it.id }) { playlist ->
-                        Row(Modifier.fillMaxWidth().background(SurfaceDark, RoundedCornerShape(15.dp)).clickable { onSelectPlaylist(playlist.id) }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().background(SurfaceDark, RoundedCornerShape(15.dp)).clickable { onSelectPlaylist(playlist.id); onSectionChange("Şarkılar") }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.QueueMusic, null, tint = Accent)
                             Spacer(Modifier.width(12.dp))
                             Text(playlist.name, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
