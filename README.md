@@ -1,6 +1,6 @@
-# Melo
+# Durka
 
-Melo, Android için geliştirilmiş çevrimdışı müzik kütüphanesi ve yerel ses oynatıcısıdır. Uygulama Kotlin, Jetpack Compose, Room, WorkManager ve AndroidX Media3 üzerine kuruludur.
+Durka, Android için geliştirilmiş çevrimdışı müzik kütüphanesi ve yerel ses oynatıcısıdır. Uygulama Kotlin, Jetpack Compose, Room, WorkManager ve AndroidX Media3 üzerine kuruludur.
 
 ## Mevcut özellikler
 
