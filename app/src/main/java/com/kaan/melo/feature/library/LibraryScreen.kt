@@ -1,4 +1,4 @@
-package com.kaan.melo
+package com.kaan.melo.feature.library
 
 import android.os.Bundle
 import android.content.Intent
