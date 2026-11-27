@@ -86,10 +86,8 @@ fun DownloadsScreen(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             val downloadTitle = job.progress.getString(com.kaan.melo.download.DirectAudioDownloadWorker.KEY_TITLE)
-                                ?: job.inputData.getString(com.kaan.melo.download.DirectAudioDownloadWorker.KEY_TITLE)
-                                ?: "Bilinmeyen parça"
+                                ?: "Hazırlanıyor..."
                             val downloadArtist = job.progress.getString(com.kaan.melo.download.DirectAudioDownloadWorker.KEY_ARTIST)
-                                ?: job.inputData.getString(com.kaan.melo.download.DirectAudioDownloadWorker.KEY_ARTIST)
                             Text(downloadTitle, fontWeight = FontWeight.SemiBold, maxLines = 1)
                             if (!downloadArtist.isNullOrBlank()) {
                                 Text(downloadArtist, color = Muted, fontSize = 11.sp, maxLines = 1)
