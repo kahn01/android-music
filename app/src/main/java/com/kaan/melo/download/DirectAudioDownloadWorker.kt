@@ -12,10 +12,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * Downloads a directly accessible audio file supplied by the user.
- * It deliberately does not extract streams from music platforms or bypass DRM.
- */
+/** Downloads a directly accessible audio file; does not extract platform streams or bypass DRM. */
 class DirectAudioDownloadWorker(
     appContext: Context,
     params: WorkerParameters
@@ -31,6 +28,7 @@ class DirectAudioDownloadWorker(
         }
 
         var connection: HttpURLConnection? = null
+        var tempFile: File? = null
         try {
             connection = URL(sourceUrl).openConnection() as HttpURLConnection
             connection.connectTimeout = 15_000
@@ -39,11 +37,19 @@ class DirectAudioDownloadWorker(
             connection.setRequestProperty("User-Agent", "Melo-Android/0.1")
             connection.connect()
 
-            if (connection.responseCode !in 200..299) return@withContext Result.retry()
-            val mime = connection.contentType?.substringBefore(';')?.lowercase().orEmpty()
-            val path = uri.lastPathSegment.orEmpty()
-            val extension = extensionFor(path, mime)
-                ?: return@withContext Result.failure()
+            val responseCode = connection.responseCode
+            if (responseCode in 500..599 || responseCode == 408 || responseCode == 429) {
+                return@withContext Result.retry()
+            }
+            if (responseCode !in 200..299) return@withContext Result.failure()
+
+            val mime = connection.contentType?.substringBefore(';')?.trim()?.lowercase().orEmpty()
+            val path = connection.url.path.orEmpty().ifBlank { uri.lastPathSegment.orEmpty() }
+            val extension = extensionFor(path, mime) ?: return@withContext Result.failure()
+            if (mime.isNotBlank() && !mime.startsWith("audio/") &&
+                mime != "application/octet-stream" && mime != "binary/octet-stream"
+            ) return@withContext Result.failure()
+
             val length = connection.contentLengthLong
             if (length > MAX_BYTES) return@withContext Result.failure()
 
@@ -56,38 +62,48 @@ class DirectAudioDownloadWorker(
             val safeName = title.replace(Regex("[^A-Za-z0-9._ -]"), "_")
                 .trim().take(70).ifBlank { "track" }
             val target = File(directory, "${System.currentTimeMillis()}-$safeName.$extension")
-            val temp = File(directory, target.name + ".part")
+            tempFile = File(directory, target.name + ".part")
 
             connection.inputStream.use { input ->
-                temp.outputStream().buffered().use { output ->
+                tempFile!!.outputStream().buffered().use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     var total = 0L
                     var lastReportedProgress = -1
                     while (true) {
                         if (isStopped) {
-                            temp.delete()
+                            tempFile?.delete()
                             return@withContext Result.failure()
                         }
                         val read = input.read(buffer)
                         if (read < 0) break
                         total += read
                         if (total > MAX_BYTES) {
-                            temp.delete()
+                            tempFile?.delete()
                             return@withContext Result.failure()
                         }
                         output.write(buffer, 0, read)
                         if (length > 0L) {
                             val progress = ((total * 100L) / length).toInt().coerceIn(0, 100)
                             if (progress != lastReportedProgress) {
-                                setProgress(androidx.work.Data.Builder().putInt(KEY_PROGRESS, progress).build())
+                                setProgress(
+                                    androidx.work.Data.Builder()
+                                        .putInt(KEY_PROGRESS, progress)
+                                        .build()
+                                )
                                 lastReportedProgress = progress
                             }
                         }
                     }
+                    if (length > 0L && total != length) {
+                        tempFile?.delete()
+                        return@withContext Result.retry()
+                    }
                 }
             }
-            if (!temp.renameTo(target)) {
-                temp.delete()
+
+            val completedTemp = tempFile ?: return@withContext Result.failure()
+            if (!completedTemp.renameTo(target)) {
+                completedTemp.delete()
                 return@withContext Result.failure()
             }
 
@@ -100,8 +116,10 @@ class DirectAudioDownloadWorker(
                     mimeType = mime.ifBlank { "audio/$extension" }
                 )
             )
+            setProgress(androidx.work.Data.Builder().putInt(KEY_PROGRESS, 100).build())
             Result.success()
         } catch (_: Exception) {
+            tempFile?.delete()
             Result.retry()
         } finally {
             connection?.disconnect()
@@ -113,10 +131,10 @@ class DirectAudioDownloadWorker(
         if (fromPath in setOf("mp3", "wav", "flac", "m4a", "ogg", "aac")) return fromPath
         return when (mime) {
             "audio/mpeg" -> "mp3"
-            "audio/wav", "audio/x-wav" -> "wav"
-            "audio/flac" -> "flac"
+            "audio/wav", "audio/x-wav", "audio/vnd.wave" -> "wav"
+            "audio/flac", "audio/x-flac" -> "flac"
             "audio/mp4", "audio/x-m4a" -> "m4a"
-            "audio/ogg" -> "ogg"
+            "audio/ogg", "application/ogg" -> "ogg"
             "audio/aac", "audio/aacp" -> "aac"
             else -> null
         }
