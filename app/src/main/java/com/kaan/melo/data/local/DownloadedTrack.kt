@@ -11,5 +11,8 @@ data class DownloadedTrack(
     val sourceUrl: String,
     val localPath: String,
     val mimeType: String,
-    val addedAt: Long = System.currentTimeMillis()
+    val addedAt: Long = System.currentTimeMillis(),
+    val artworkUrl: String? = null,
+    val playCount: Int = 0,
+    val lastPlayedAt: Long? = null
 )
