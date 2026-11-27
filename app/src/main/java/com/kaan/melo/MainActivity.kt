@@ -1,6 +1,7 @@
 package com.kaan.melo
 
 import android.os.Bundle
+import android.content.Intent
 import android.content.ComponentName
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -186,6 +187,13 @@ private fun MeloApp() {
                     message = "İndirme kuyruğa eklendi. Durumunu İndirmeler sekmesinden takip edebilirsin."
                     selectedTab = 1
                 },
+                onOpenSource = {
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link.trim())))
+                    }.onFailure {
+                        message = "Bağlantı açılamadı. İlgili uygulamanın yüklü olduğundan emin ol."
+                    }
+                },
                 message = message,
                 source = source
             )
@@ -221,6 +229,7 @@ private fun HomeScreen(
     onTitleChange: (String) -> Unit,
     onAnalyze: () -> Unit,
     onDownload: () -> Unit,
+    onOpenSource: () -> Unit,
     message: String?,
     source: MusicSource?
 ) {
@@ -297,6 +306,22 @@ private fun HomeScreen(
                 }
                 if (message != null) {
                     Text(message, color = if (source == MusicSource.DIRECT) Color(0xFFB8A5FF) else Color(0xFFFFB4A9), fontSize = 13.sp)
+                }
+                if (source != null && source != MusicSource.DIRECT) {
+                    OutlinedButton(
+                        onClick = onOpenSource,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(15.dp)
+                    ) {
+                        Icon(Icons.Default.OpenInNew, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Bağlantıyı platformda aç", fontWeight = FontWeight.Bold)
+                    }
+                    Text(
+                        "Test modu: bağlantı ilgili serviste açılır; korumalı yayın indirilmez.",
+                        color = Muted,
+                        fontSize = 11.sp
+                    )
                 }
                 if (source == MusicSource.DIRECT) {
                     Button(
