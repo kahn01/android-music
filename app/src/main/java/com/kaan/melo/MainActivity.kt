@@ -4,16 +4,18 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -22,8 +24,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.kaan.melo.core.links.LinkParser
 import com.kaan.melo.core.links.MusicSource
+import com.kaan.melo.data.local.DownloadedTrack
+import com.kaan.melo.data.local.MeloDatabase
+import com.kaan.melo.download.DownloadScheduler
+import java.io.File
 
 private val Background = Color(0xFF09090F)
 private val SurfaceDark = Color(0xFF171722)
@@ -52,10 +64,45 @@ private fun MeloTheme(content: @Composable () -> Unit) {
 
 @Composable
 private fun MeloApp() {
+    val context = LocalContext.current
+    val database = remember { MeloDatabase.get(context) }
+    val player = remember { ExoPlayer.Builder(context).build() }
+    val tracks by database.downloadedTrackDao().observeAll().collectAsState(initial = emptyList())
+    val jobs by WorkManager.getInstance(context)
+        .getWorkInfosByTagLiveData(DownloadScheduler.TAG_DOWNLOAD)
+        .observeAsState(initial = emptyList())
     var selectedTab by remember { mutableIntStateOf(0) }
     var link by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     var source by remember { mutableStateOf<MusicSource?>(null) }
+    var playingTrackId by remember { mutableStateOf<Long?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) isPlaying = false
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
+    }
+
+    fun playTrack(track: DownloadedTrack) {
+        if (playingTrackId == track.id) {
+            if (player.isPlaying) player.pause() else player.play()
+        } else {
+            playingTrackId = track.id
+            player.setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(File(track.localPath))))
+            player.prepare()
+            player.play()
+        }
+    }
 
     Scaffold(
         containerColor = Background,
@@ -86,15 +133,48 @@ private fun MeloApp() {
     ) { padding ->
         when (selectedTab) {
             0 -> HomeScreen(
-                Modifier.padding(padding), link, { link = it; message = null; source = null },
-                {
+                modifier = Modifier.padding(padding),
+                link = link,
+                onLinkChange = { link = it; message = null; source = null },
+                title = title,
+                onTitleChange = { title = it },
+                onAnalyze = {
                     source = LinkParser.parse(link)
-                    message = if (source == null) "Desteklenen bir bağlantı algılanamadı."
-                    else source!!.displayName + " bağlantısı tanındı. İçerik bilgileri için desteklenen API erişimi gerekir."
-                }, message, source
+                    message = when (source) {
+                        null -> "Bu bağlantı tanınmadı. Doğrudan MP3, WAV, FLAC, M4A, OGG veya AAC dosyası deneyebilirsin."
+                        MusicSource.DIRECT -> "Doğrudan ses dosyası algılandı. İndirmeyi başlatabilirsin."
+                        else -> "${source!!.displayName} bağlantısı tanındı. Bu platformun bağlantısını tanımak, ses dosyasını indirme izni vermez."
+                    }
+                },
+                onDownload = {
+                    DownloadScheduler.enqueue(
+                        context = context,
+                        url = link.trim(),
+                        title = title.ifBlank { link.substringAfterLast('/').substringBefore('?').ifBlank { "Melo parçası" } }
+                    )
+                    message = "İndirme kuyruğa eklendi. Durumunu İndirmeler sekmesinden takip edebilirsin."
+                    selectedTab = 1
+                },
+                message = message,
+                source = source
             )
-            1 -> EmptyScreen(Modifier.padding(padding), "İndirmeler", "İndirme kuyruğun burada görünecek.", Icons.Default.Download)
-            else -> EmptyScreen(Modifier.padding(padding), "Kütüphanem", "Telefondaki müziklerin burada listelenecek.", Icons.Default.LibraryMusic)
+            1 -> DownloadsScreen(Modifier.padding(padding), jobs)
+            else -> LibraryScreen(
+                modifier = Modifier.padding(padding),
+                tracks = tracks,
+                playingTrackId = playingTrackId,
+                isPlaying = isPlaying,
+                onPlay = ::playTrack,
+                onDelete = { track ->
+                    if (playingTrackId == track.id) {
+                        player.stop()
+                        playingTrackId = null
+                        isPlaying = false
+                    }
+                    database.downloadedTrackDao().deleteById(track.id)
+                    File(track.localPath).delete()
+                }
+            )
         }
     }
 }
@@ -104,7 +184,10 @@ private fun HomeScreen(
     modifier: Modifier,
     link: String,
     onLinkChange: (String) -> Unit,
+    title: String,
+    onTitleChange: (String) -> Unit,
     onAnalyze: () -> Unit,
+    onDownload: () -> Unit,
     message: String?,
     source: MusicSource?
 ) {
@@ -128,13 +211,13 @@ private fun HomeScreen(
                     Text("MÜZİĞİN, SENİN KONTROLÜNDE", fontSize = 9.sp, color = Muted, letterSpacing = 1.sp)
                 }
                 Spacer(Modifier.weight(1f))
-                IconButton(onClick = {}) { Icon(Icons.Default.Settings, "Ayarlar", tint = Muted) }
+                Icon(Icons.Default.Headphones, null, tint = Muted)
             }
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Müziğini keşfet.", fontSize = 31.sp, fontWeight = FontWeight.Bold)
-                Text("Bağlantıyı ekle, içerik bilgilerini bul ve desteklenen sesleri kütüphanene kaydet.", color = Muted, fontSize = 14.sp)
+                Text("Ses bağlantısını ekle, indir ve çevrimdışı kütüphanende dinle.", color = Muted, fontSize = 14.sp)
             }
         }
         item {
@@ -154,23 +237,25 @@ private fun HomeScreen(
                     value = link,
                     onValueChange = onLinkChange,
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("YouTube, Spotify veya Deezer linki", color = Muted) },
+                    placeholder = { Text("Doğrudan ses dosyası bağlantısı", color = Muted) },
                     minLines = 2,
                     shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Accent,
-                        unfocusedBorderColor = Color(0xFF3A3548),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = Accent
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { onAnalyze() })
+                    colors = fieldColors(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                )
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = onTitleChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Şarkı adı (isteğe bağlı)", color = Muted) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = fieldColors()
                 )
                 Button(
                     onClick = onAnalyze,
                     enabled = link.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
                     shape = RoundedCornerShape(15.dp)
                 ) {
                     Icon(Icons.Default.Search, null)
@@ -178,36 +263,43 @@ private fun HomeScreen(
                     Text("Bağlantıyı analiz et", fontWeight = FontWeight.Bold)
                 }
                 if (message != null) {
-                    Text(message, color = if (source != null) Color(0xFFB8A5FF) else Color(0xFFFF8A8A), fontSize = 13.sp)
+                    Text(message, color = if (source == MusicSource.DIRECT) Color(0xFFB8A5FF) else Color(0xFFFFB4A9), fontSize = 13.sp)
                 }
-                if (source != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF8DD9AE))
+                if (source == MusicSource.DIRECT) {
+                    Button(
+                        onClick = onDownload,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(15.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7254D4))
+                    ) {
+                        Icon(Icons.Default.Download, null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Kaynak: " + source.displayName, fontWeight = FontWeight.SemiBold)
+                        Text("İndirmeyi başlat", fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
         item {
-            Text("DESTEKLENEN KAYNAKLAR", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text("BAĞLANTI TANIMA", color = Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 SourceChip("YouTube", "YT")
                 SourceChip("Spotify", "S")
                 SourceChip("Deezer", "D")
             }
-        }
-        item {
-            Text("Hızlı erişim", fontSize = 19.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                QuickCard("İndirmeler", Icons.Default.Download, Modifier.weight(1f))
-                QuickCard("Kütüphanem", Icons.Default.LibraryMusic, Modifier.weight(1f))
-            }
+            Text("Bu servislerin bağlantıları tanınır; korumalı yayınlar indirilmeye çalışılmaz.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
         }
     }
 }
+
+@Composable
+private fun fieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = Accent,
+    unfocusedBorderColor = Color(0xFF3A3548),
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Color.White,
+    cursorColor = Accent
+)
 
 @Composable
 private fun SourceChip(name: String, mark: String) {
@@ -222,32 +314,115 @@ private fun SourceChip(name: String, mark: String) {
 }
 
 @Composable
-private fun QuickCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier) {
-    Column(
-        modifier.background(SurfaceDark, RoundedCornerShape(18.dp)).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Icon(icon, null, tint = Accent, modifier = Modifier.size(23.dp))
-        Text(title, fontWeight = FontWeight.SemiBold)
+private fun DownloadsScreen(modifier: Modifier, jobs: List<WorkInfo>) {
+    val active = jobs.filter { !it.state.isFinished }
+    val completed = jobs.count { it.state == WorkInfo.State.SUCCEEDED }
+    val failed = jobs.count { it.state == WorkInfo.State.FAILED || it.state == WorkInfo.State.CANCELLED }
+    Column(modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("İndirmeler", fontSize = 29.sp, fontWeight = FontWeight.Bold)
+        Text("Arka plandaki indirme işlemlerini buradan takip et.", color = Muted)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            StatCard("Devam eden", active.size.toString(), Modifier.weight(1f))
+            StatCard("Tamamlanan", completed.toString(), Modifier.weight(1f))
+            StatCard("Hatalı", failed.toString(), Modifier.weight(1f))
+        }
+        if (jobs.isEmpty()) {
+            EmptyState(Icons.Default.Download, "Henüz indirme yok", "Keşfet sekmesinden doğrudan bir ses dosyası bağlantısı ekle.")
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(jobs, key = { it.id.toString() }) { job ->
+                    val label = when (job.state) {
+                        WorkInfo.State.ENQUEUED -> "Sırada"
+                        WorkInfo.State.RUNNING -> "İndiriliyor"
+                        WorkInfo.State.SUCCEEDED -> "Tamamlandı"
+                        WorkInfo.State.FAILED -> "Başarısız"
+                        WorkInfo.State.BLOCKED -> "Bekliyor"
+                        WorkInfo.State.CANCELLED -> "İptal edildi"
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().background(SurfaceDark, RoundedCornerShape(16.dp)).padding(15.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(if (job.state == WorkInfo.State.SUCCEEDED) Icons.Default.CheckCircle else Icons.Default.Download, null, tint = Accent)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(job.workSpecIdShort(), fontWeight = FontWeight.SemiBold)
+                            Text(label, color = Muted, fontSize = 12.sp)
+                        }
+                        if (job.state == WorkInfo.State.RUNNING) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun WorkInfo.workSpecIdShort(): String = "Ses dosyası · ${id.toString().take(8)}"
+
+@Composable
+private fun LibraryScreen(
+    modifier: Modifier,
+    tracks: List<DownloadedTrack>,
+    playingTrackId: Long?,
+    isPlaying: Boolean,
+    onPlay: (DownloadedTrack) -> Unit,
+    onDelete: (DownloadedTrack) -> Unit
+) {
+    Column(modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 26.dp)) {
+        Text("Kütüphanem", fontSize = 29.sp, fontWeight = FontWeight.Bold)
+        Text("${tracks.size} kayıtlı parça · çevrimdışı dinleme", color = Muted, modifier = Modifier.padding(top = 6.dp, bottom = 18.dp))
+        if (tracks.isEmpty()) {
+            EmptyState(Icons.Default.LibraryMusic, "Kütüphanen boş", "İndirdiğin izinli ses dosyaları burada görünecek.")
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(tracks, key = { it.id }) { track ->
+                    Row(
+                        Modifier.fillMaxWidth().background(SurfaceDark, RoundedCornerShape(16.dp)).padding(13.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier.size(44.dp).background(Color(0xFF30264A), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Default.MusicNote, null, tint = Accent) }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(track.title, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(track.artist ?: track.mimeType, color = Muted, fontSize = 12.sp, maxLines = 1)
+                        }
+                        IconButton(onClick = { onPlay(track) }) {
+                            Icon(
+                                if (playingTrackId == track.id && isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
+                                contentDescription = "Çal",
+                                tint = Accent
+                            )
+                        }
+                        IconButton(onClick = { onDelete(track) }) {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = "Sil", tint = Muted)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun EmptyScreen(
-    modifier: Modifier,
-    title: String,
-    subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
-) {
+private fun StatCard(label: String, value: String, modifier: Modifier) {
+    Column(modifier.background(SurfaceDark, RoundedCornerShape(15.dp)).padding(12.dp)) {
+        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = Muted, fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun EmptyState(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String) {
     Column(
-        modifier.fillMaxSize().padding(28.dp),
+        Modifier.fillMaxWidth().padding(vertical = 70.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Icon(icon, null, tint = Accent, modifier = Modifier.size(54.dp))
-        Spacer(Modifier.height(18.dp))
-        Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Text(subtitle, color = Muted)
+        Icon(icon, null, tint = Accent, modifier = Modifier.size(52.dp))
+        Text(title, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(subtitle, color = Muted, fontSize = 13.sp)
     }
 }
