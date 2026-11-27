@@ -82,7 +82,7 @@ fun HomeScreen(
                 ) { Icon(Icons.Default.GraphicEq, null, tint = Color.White) }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("melo", fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Durka", fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
                     Text("MÜZİĞİN, SENİN KONTROLÜNDE", fontSize = 9.sp, color = Muted, letterSpacing = 1.sp)
                 }
                 Spacer(Modifier.weight(1f))
