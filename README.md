@@ -5,7 +5,7 @@ Melo, Android için geliştirilmiş çevrimdışı müzik kütüphanesi ve yerel
 ## Mevcut özellikler
 
 - **Yerel müzik kütüphanesi:** İndirilen ses dosyalarını Room veritabanında kayıtlı tutar; parça adı ve sanatçıya göre arama yapılabilir.
-- **Çevrimdışı oynatma:** Media3 tabanlı oynatıcı ve uygulama içi mini oynatıcı.
+- **Çevrimdışı oynatma:** Media3 tabanlı oynatıcı, mini oynatıcı ve tam ekran “Şimdi çalıyor” ekranı; parça arama/atlama, karıştırma ve tekrar kontrolleri.
 - **YouTube bağlantı çözümleme:** Tek video ve herkese açık oynatma listesi bağlantılarından parça bilgilerini listeleme.
 - **İndirme kuyruğu:** WorkManager ile arka plan indirmeleri, parça adı/sanatçı bilgisi, ilerleme yüzdesi ve devam eden işi iptal etme.
 - **Toplu playlist kuyruğu:** Listelenen parçaları topluca indirme kuyruğuna ekleme.
@@ -60,7 +60,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ## Bilinen geliştirme alanları
 
-- Gerçek cihazlarda tam ekran oynatıcı ve oynatma kontrollerini doğrulama
+- Gerçek cihazlarda oynatma, arka plan servisi ve indirme akışlarını doğrulama
 - İndirme kuyruğunda filtreleme ve daha ayrıntılı hata açıklamaları
 - Ekranların ViewModel/state katmanlarına daha fazla ayrıştırılması
 - Gerçek cihazlarda farklı Android sürümleri ve arka plan koşulları için test
