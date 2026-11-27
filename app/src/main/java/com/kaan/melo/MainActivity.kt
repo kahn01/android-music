@@ -151,7 +151,7 @@ private fun MeloApp() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val id = mediaItem?.mediaId?.toLongOrNull() ?: return
                 playingTrackId = id
-                coroutineScope.launch { database.downloadedTrackDao().recordPlay(id) }
+                coroutineScope.launch { database.downloadedTrackDao().recordPlay(id, System.currentTimeMillis()) }
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) isPlaying = false
