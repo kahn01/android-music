@@ -60,7 +60,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ## Bilinen geliştirme alanları
 
-- Tam ekran “Şimdi çalıyor” ekranı ve gelişmiş oynatma kontrolleri
+- Gerçek cihazlarda tam ekran oynatıcı ve oynatma kontrollerini doğrulama
 - İndirme kuyruğunda filtreleme ve daha ayrıntılı hata açıklamaları
 - Ekranların ViewModel/state katmanlarına daha fazla ayrıştırılması
 - Gerçek cihazlarda farklı Android sürümleri ve arka plan koşulları için test
