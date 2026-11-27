@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import kotlinx.coroutines.delay
+import com.kaan.melo.ui.components.TrackArtwork
 
 private val PlayerAccent = Color(0xFFB49AFF)
 
@@ -26,6 +27,7 @@ fun FullPlayerScreen(
     title: String,
     artist: String,
     isPlaying: Boolean,
+    artworkUrl: String?,
     onBack: () -> Unit
 ) {
     var position by remember { mutableLongStateOf(0L) }
@@ -64,15 +66,10 @@ fun FullPlayerScreen(
             IconButton(onClick = {}) { Icon(Icons.Default.MoreVert, "Diğer", tint = Color.White) }
         }
         Spacer(Modifier.weight(0.7f))
-        Box(
-            Modifier.fillMaxWidth().aspectRatio(1f).background(
-                Brush.linearGradient(listOf(Color(0xFF7356B8), Color(0xFF30264A), Color(0xFF1C1B29))),
-                RoundedCornerShape(28.dp)
-            ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.Album, null, tint = Color(0xFFD9CCFF), modifier = Modifier.size(124.dp))
-        }
+        TrackArtwork(
+            artworkUrl = artworkUrl,
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+        )
         Spacer(Modifier.height(32.dp))
         Column(Modifier.fillMaxWidth()) {
             Text(title, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1)
