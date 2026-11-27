@@ -1,5 +1,10 @@
 package com.kaan.melo
 
+import com.kaan.melo.feature.home.HomeScreen
+import com.kaan.melo.feature.downloads.DownloadsScreen
+import com.kaan.melo.feature.library.LibraryScreen
+import com.kaan.melo.ui.components.*
+
 import android.os.Bundle
 import android.content.Intent
 import android.content.ComponentName
