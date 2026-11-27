@@ -158,7 +158,32 @@ private fun MeloApp() {
     Scaffold(
         containerColor = Background,
         bottomBar = {
-            NavigationBar(containerColor = SurfaceDark) {
+            Column {
+                val currentTrack = tracks.firstOrNull { it.id == playingTrackId }
+                if (currentTrack != null) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp)
+                            .background(Color(0xFF28203F), RoundedCornerShape(15.dp))
+                            .clickable { selectedTab = 2 }.padding(horizontal = 13.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.size(38.dp).background(Color(0xFF49366F), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.MusicNote, null, tint = Accent)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(currentTrack.title, fontWeight = FontWeight.SemiBold, maxLines = 1, fontSize = 13.sp)
+                            Text(currentTrack.artist ?: "Bilinmeyen sanatçı", color = Muted, fontSize = 11.sp, maxLines = 1)
+                        }
+                        IconButton(onClick = { player?.let { if (it.isPlaying) it.pause() else it.play() } }) {
+                            Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Oynat/Duraklat", tint = Accent)
+                        }
+                        IconButton(onClick = { player?.seekToNextMediaItem() }) {
+                            Icon(Icons.Default.SkipNext, "Sonraki", tint = Color.White)
+                        }
+                    }
+                }
+                NavigationBar(containerColor = SurfaceDark) {
                 val tabs = listOf(
                     "Keşfet" to Icons.Default.Explore,
                     "İndirmeler" to Icons.Default.Download,
@@ -178,6 +203,7 @@ private fun MeloApp() {
                             unselectedTextColor = Muted
                         )
                     )
+                }
                 }
             }
         }
