@@ -54,7 +54,14 @@ fun DownloadsScreen(
     jobs: List<WorkInfo>,
     onCancel: (WorkInfo) -> Unit
 ) {
+    var historyFilter by remember { mutableStateOf("Tümü") }
     val active = jobs.filter { !it.state.isFinished }
+    val visibleJobs = when (historyFilter) {
+        "Aktif" -> jobs.filter { !it.state.isFinished }
+        "Tamamlanan" -> jobs.filter { it.state == WorkInfo.State.SUCCEEDED }
+        "Hatalı" -> jobs.filter { it.state == WorkInfo.State.FAILED || it.state == WorkInfo.State.CANCELLED }
+        else -> jobs
+    }
     val completed = jobs.count { it.state == WorkInfo.State.SUCCEEDED }
     val failed = jobs.count { it.state == WorkInfo.State.FAILED || it.state == WorkInfo.State.CANCELLED }
     Column(modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -65,11 +72,18 @@ fun DownloadsScreen(
             StatCard("Tamamlanan", completed.toString(), Modifier.weight(1f))
             StatCard("Hatalı", failed.toString(), Modifier.weight(1f))
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            listOf("Tümü", "Aktif", "Tamamlanan", "Hatalı").forEach { filter ->
+                FilterChip(selected = historyFilter == filter, onClick = { historyFilter = filter }, label = { Text(filter, fontSize = 10.sp) })
+            }
+        }
         if (jobs.isEmpty()) {
             EmptyState(Icons.Default.Download, "Henüz indirme yok", "Keşfet sekmesinden doğrudan bir ses dosyası bağlantısı ekle.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(jobs, key = { it.id.toString() }) { job ->
+            if (visibleJobs.isEmpty()) {
+                EmptyState(Icons.Default.History, "Bu filtrede işlem yok", "İndirme geçmişindeki diğer işlemleri görmek için filtreyi değiştir.")
+            } else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(visibleJobs, key = { it.id.toString() }) { job ->
                     val label = when (job.state) {
                         WorkInfo.State.ENQUEUED -> "Sırada"
                         WorkInfo.State.RUNNING -> "İndiriliyor"
@@ -93,6 +107,9 @@ fun DownloadsScreen(
                                 Text(downloadArtist, color = Muted, fontSize = 11.sp, maxLines = 1)
                             }
                             Text(label, color = Muted, fontSize = 12.sp)
+                            job.outputData.getString("error")?.takeIf { it.isNotBlank() }?.let { error ->
+                                Text(error, color = Color(0xFFFF8A80), fontSize = 10.sp, maxLines = 2)
+                            }
                             if (job.state == WorkInfo.State.RUNNING) {
                                 val progress = job.progress.getInt("progress", 0)
                                 Spacer(Modifier.height(7.dp))
