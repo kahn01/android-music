@@ -1,6 +1,7 @@
 package com.kaan.melo
 
 import android.os.Bundle
+import android.content.ComponentName
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -26,8 +27,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import androidx.core.content.ContextCompat
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.kaan.melo.core.links.LinkParser
@@ -68,7 +72,22 @@ private fun MeloApp() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val database = remember { MeloDatabase.get(context) }
-    val player = remember { ExoPlayer.Builder(context).build() }
+    var player by remember { mutableStateOf<MediaController?>(null) }
+    val controllerFuture = remember(context) {
+        MediaController.Builder(
+            context,
+            SessionToken(context, ComponentName(context, MeloPlaybackService::class.java))
+        ).buildAsync()
+    }
+    DisposableEffect(controllerFuture) {
+        controllerFuture.addListener(
+            {
+                runCatching { controllerFuture.get() }.onSuccess { player = it }
+            },
+            ContextCompat.getMainExecutor(context)
+        )
+        onDispose { MediaController.releaseFuture(controllerFuture) }
+    }
     val tracks by database.downloadedTrackDao().observeAll().collectAsState(initial = emptyList())
     val jobs by WorkManager.getInstance(context)
         .getWorkInfosByTagLiveData(DownloadScheduler.TAG_DOWNLOAD)
@@ -82,27 +101,35 @@ private fun MeloApp() {
     var isPlaying by remember { mutableStateOf(false) }
 
     DisposableEffect(player) {
+        val activePlayer = player
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED) isPlaying = false
             }
         }
-        player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-            player.release()
-        }
+        activePlayer?.addListener(listener)
+        onDispose { activePlayer?.removeListener(listener) }
     }
 
     fun playTrack(track: DownloadedTrack) {
+        val activePlayer = player ?: return
         if (playingTrackId == track.id) {
-            if (player.isPlaying) player.pause() else player.play()
+            if (activePlayer.isPlaying) activePlayer.pause() else activePlayer.play()
         } else {
             playingTrackId = track.id
-            player.setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(File(track.localPath))))
-            player.prepare()
-            player.play()
+            val metadata = MediaMetadata.Builder()
+                .setTitle(track.title)
+                .setArtist(track.artist ?: "Melo")
+                .build()
+            activePlayer.setMediaItem(
+                MediaItem.Builder()
+                    .setUri(android.net.Uri.fromFile(File(track.localPath)))
+                    .setMediaMetadata(metadata)
+                    .build()
+            )
+            activePlayer.prepare()
+            activePlayer.play()
         }
     }
 
@@ -169,7 +196,7 @@ private fun MeloApp() {
                 onPlay = ::playTrack,
                 onDelete = { track ->
                     if (playingTrackId == track.id) {
-                        player.stop()
+                        player?.stop()
                         playingTrackId = null
                         isPlaying = false
                     }
