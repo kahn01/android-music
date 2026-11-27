@@ -36,6 +36,7 @@ import com.kaan.melo.data.local.DownloadedTrack
 import com.kaan.melo.data.local.MeloDatabase
 import com.kaan.melo.download.DownloadScheduler
 import java.io.File
+import kotlinx.coroutines.launch
 
 private val Background = Color(0xFF09090F)
 private val SurfaceDark = Color(0xFF171722)
@@ -65,6 +66,7 @@ private fun MeloTheme(content: @Composable () -> Unit) {
 @Composable
 private fun MeloApp() {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val database = remember { MeloDatabase.get(context) }
     val player = remember { ExoPlayer.Builder(context).build() }
     val tracks by database.downloadedTrackDao().observeAll().collectAsState(initial = emptyList())
@@ -171,8 +173,10 @@ private fun MeloApp() {
                         playingTrackId = null
                         isPlaying = false
                     }
-                    database.downloadedTrackDao().deleteById(track.id)
-                    File(track.localPath).delete()
+                    coroutineScope.launch {
+                        database.downloadedTrackDao().deleteById(track.id)
+                        File(track.localPath).delete()
+                    }
                 }
             )
         }
