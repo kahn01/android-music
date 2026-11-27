@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.kaan.melo.data.local.DownloadedTrack
+import com.kaan.melo.data.ArtworkResolver
 import com.kaan.melo.data.local.MeloDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -142,13 +143,15 @@ class DirectAudioDownloadWorker(
                 return@withContext Result.failure()
             }
 
+            val artworkUrl = runCatching { ArtworkResolver.findArtwork(title, artist) }.getOrNull()
             MeloDatabase.get(applicationContext).downloadedTrackDao().insert(
                 DownloadedTrack(
                     title = title,
                     artist = artist,
                     sourceUrl = sourceUrl,
                     localPath = target.absolutePath,
-                    mimeType = mime.ifBlank { "audio/$extension" }
+                    mimeType = mime.ifBlank { "audio/$extension" },
+                    artworkUrl = artworkUrl
                 )
             )
             setProgress(
