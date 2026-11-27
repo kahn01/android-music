@@ -192,7 +192,7 @@ private fun MeloApp() {
             val queue = playableTracks.map { item ->
                 val metadata = MediaMetadata.Builder()
                     .setTitle(item.title)
-                    .setArtist(item.artist ?: "Melo")
+                    .setArtist(item.artist ?: "Durka")
                     .apply { item.artworkUrl?.let { setArtworkUri(android.net.Uri.parse(it)) } }
                     .build()
                 MediaItem.Builder()
@@ -364,7 +364,7 @@ private fun MeloApp() {
                     DownloadScheduler.enqueue(
                         context = context,
                         url = link.trim(),
-                        title = if (source == MusicSource.YOUTUBE) "Bilinmeyen parça" else title.ifBlank { link.substringAfterLast('/').substringBefore('?').ifBlank { "Melo parçası" } }
+                        title = if (source == MusicSource.YOUTUBE) "Bilinmeyen parça" else title.ifBlank { link.substringAfterLast('/').substringBefore('?').ifBlank { "Durka parçası" } }
                     )
                     message = "İndirme kuyruğa eklendi. Durumunu İndirmeler sekmesinden takip edebilirsin."
                     selectedTab = 1
